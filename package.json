@@ -1,0 +1,36 @@
+{
+  "name": "wave-tracker-dev",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "emulator": "firebase emulators:start",
+    "dev:local": "concurrently \"firebase emulators:start\" \"npm run dev\"",
+    "deploy": "./scripts/deploy-dev.sh",
+    "deploy:dev": "./scripts/deploy-dev.sh"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.17.1",
+    "autoprefixer": "^10.4.21",
+    "firebase": "^10.14.1",
+    "firebase-admin": "^13.5.0",
+    "next": "15.4.6",
+    "react": "^18",
+    "react-dom": "^18",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "concurrently": "^8.2.2",
+    "eslint": "^8",
+    "eslint-config-next": "15.4.6",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}

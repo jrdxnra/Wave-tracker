@@ -1,0 +1,9 @@
+{
+  "hosting": {
+    "source": ".",
+    "frameworksBackend": {}
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}
