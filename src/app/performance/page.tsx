@@ -15,7 +15,7 @@ export default function PerformancePage() {
   const [selectedWaveId, setSelectedWaveId] = useState<string | null>(null);
   const router = useRouter();
   
-  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, setCurrentWave, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, syncWithFirebase, syncWithFirebaseNoCooldown, setUserActivity, loadGlobalConfig } = useWaveStore();
+  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, syncWithFirebase, syncWithFirebaseNoCooldown, setUserActivity } = useWaveStore();
   const waveIds = Object.keys(waves);
   
   // Use local selectedWaveId for tab persistence, fallback to currentWaveId
@@ -24,8 +24,6 @@ export default function PerformancePage() {
 
   useEffect(() => {
     setMounted(true);
-    // Load fresh global config from Firebase on page load
-    loadGlobalConfig();
     // Sync with Firebase on page load to get fresh wave data
     syncWithFirebase();
     
@@ -53,7 +51,7 @@ export default function PerformancePage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pageshow', handlePageShow);
     };
-  }, [loadGlobalConfig, syncWithFirebase, syncWithFirebaseNoCooldown]);
+  }, [syncWithFirebase, syncWithFirebaseNoCooldown]);
 
   // No background sync - only sync on page load and after saves
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { useWaveStore } from '@/store/waveStore';
 import { getFirebase } from '@/lib/firebase';
 import { doc, setDoc, collection } from 'firebase/firestore';
@@ -22,7 +22,6 @@ interface PerformanceTableProps {
 export default function PerformanceTable({ wave }: PerformanceTableProps) {
   const {
     customEvents,
-    intervalMinutes,
     workMinutes,
     restMinutes,
     updateParticipantData,
@@ -108,14 +107,12 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
 
     try {
       // Apply any pending updates from lastTypedValues
-      let appliedUpdates = 0;
       Object.keys(lastTypedValues.current).forEach(key => {
         const [waveId, participantId, field] = key.split('-');
         if (waveId === wave.id) {
           const value = lastTypedValues.current[key];
           if (value !== undefined) {
             updateParticipantData(waveId, participantId, field, value);
-            appliedUpdates++;
           }
         }
       });
@@ -261,13 +258,6 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
                             // At last row, blur to dismiss keyboard
                             (e.target as HTMLInputElement).blur();
                           }
-                        }
-                      }}
-                      onKeyPress={(e) => {
-                        // Additional handler for mobile keyboards
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          e.stopPropagation();
                         }
                       }}
                       data-participant-index={index}

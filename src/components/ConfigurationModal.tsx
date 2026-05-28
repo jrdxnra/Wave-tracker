@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useWaveStore } from '@/store/waveStore';
 import PasscodeProtection from '@/components/PasscodeProtection';
 
@@ -15,7 +15,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache }: Co
     customEvents, updateWaveEvents, intervalMinutes, workMinutes, restMinutes, maxParticipants, 
     workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode,
     setTimingConfig, setMaxParticipants, setWorkoutTimerConfig, setEventConfig, setAccessPasscode,
-    forceUpdateAllParticipants, loadGlobalConfig
+    loadGlobalConfig
   } = useWaveStore();
   
   const [events, setEvents] = useState<string[]>(customEvents);
@@ -39,7 +39,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache }: Co
         console.log('📋 Loaded fresh config, syncing ConfigurationModal with store values:', { eventStartDate, eventStartTime, totalWaves });
       });
     }
-  }, [isOpen, loadGlobalConfig]);
+  }, [isOpen, loadGlobalConfig, eventStartDate, eventStartTime, totalWaves]);
 
   // Sync local state whenever store values change
   useEffect(() => {
@@ -241,7 +241,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache }: Co
               <ul className="text-[13px] text-blue-700 space-y-1 list-disc pl-5">
                 <li>When you add a new movement, a blank cell is created for that movement for every participant so you can fill it later. Existing values in other movements are not changed.</li>
                 <li>Add hyphens (-) in movement names to control text wrapping in print</li>
-                <li>Example: "BURPEE-BROAD JUMPS" will wrap at the hyphen</li>
+                <li>Example: &quot;BURPEE-BROAD JUMPS&quot; will wrap at the hyphen</li>
               </ul>
             </div>
             <div className="flex space-x-2">
@@ -249,7 +249,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache }: Co
                 type="text"
                 value={newEvent}
                 onChange={(e) => setNewEvent(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAddEvent()}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddEvent()}
                 placeholder="Enter movement name..."
                 className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
               />

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 interface FloatingHamburgerMenuProps {
@@ -95,7 +94,7 @@ export default function FloatingHamburgerMenu({ onConfigClick, currentPage }: Fl
     <div className="fixed bottom-6 right-6 z-50">
       {/* Menu Items - Expand upward */}
       <div className={`flex flex-col-reverse gap-2 mb-4 transition-all duration-500 ${isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-        {menuItems.map((item, index) => (
+        {menuItems.map((item) => (
           <button
             key={item.id}
             onClick={item.onClick}
