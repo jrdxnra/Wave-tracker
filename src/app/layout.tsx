@@ -1,10 +1,7 @@
 import React from 'react';
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import SecurityProvider from '@/components/SecurityProvider';
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Wave Tracker',
@@ -27,7 +24,7 @@ export default function RootLayout({
       <head>
         <meta name="color-scheme" content="light" />
       </head>
-      <body className={`${inter.className} bg-gray-50 text-gray-900`} suppressHydrationWarning>
+      <body className="font-sans bg-gray-50 text-gray-900" suppressHydrationWarning>
         <SecurityProvider>
           {children}
         </SecurityProvider>

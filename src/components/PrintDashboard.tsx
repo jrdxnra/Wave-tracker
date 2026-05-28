@@ -19,7 +19,7 @@ interface PrintDashboardProps {
 }
 
 export default function PrintDashboard({ wave }: PrintDashboardProps) {
-  const { customEvents, eventNotes, intervalMinutes, workMinutes, restMinutes } = useWaveStore();
+  const { customEvents, eventNotes, workMinutes, restMinutes } = useWaveStore();
 
   const handlePrint = async () => {
     const doSave = window.confirm(`Save changes for "${wave.name}" to cloud storage before printing?`);
@@ -34,9 +34,9 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
           participants: wave.participants
         }, { merge: true });
         
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('❌ Save failed:', e);
-        alert(`Save failed: ${e?.message || e}`);
+        alert(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
         return; // Don't proceed with print if save failed
       }
     }

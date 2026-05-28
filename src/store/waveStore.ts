@@ -4,8 +4,36 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Participant, Wave, WAVE_EVENTS } from '@/types';
 import { getFirebase } from '@/lib/firebase';
-import { collection, doc, setDoc, writeBatch, serverTimestamp, getDoc, getDocs, deleteDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, writeBatch, serverTimestamp, getDoc, getDocs, deleteDoc, DocumentReference } from 'firebase/firestore';
 import { secureLogger } from '@/lib/secureLogger';
+
+// Firebase data types
+interface FirebaseConfigData {
+  customEvents?: string[];
+  timing?: {
+    intervalMinutes?: number;
+    workMinutes?: number;
+    restMinutes?: number;
+  };
+  eventNotes?: string;
+  maxParticipants?: number;
+  workoutTimer?: {
+    workSeconds?: number;
+    restSeconds?: number;
+  };
+  event?: {
+    startDate?: string;
+    startTime?: string;
+    totalWaves?: number;
+  };
+  alertSettings?: WaveStore['alertSettings'];
+  accessPasscode?: string;
+}
+
+interface FirebaseWaveData {
+  name?: string;
+  startTime?: string;
+}
 
 interface WaveStore {
   waves: Record<string, Wave>;
@@ -75,6 +103,13 @@ const createInitialWaveData = (events: string[]): Record<string, string> =>
     acc[e] = '';
     return acc;
   }, {} as Record<string, string>);
+
+/** Load all participants from a wave's Firestore subcollection. */
+async function loadWaveParticipants(waveRef: DocumentReference): Promise<Participant[]> {
+  const participantsCol = collection(waveRef, 'participants');
+  const partsSnap = await getDocs(participantsCol);
+  return partsSnap.docs.map((d) => d.data() as Participant);
+}
 
 export const useWaveStore = create<WaveStore>()(
   persist(
@@ -556,7 +591,7 @@ export const useWaveStore = create<WaveStore>()(
           const cfgRef = doc(collection(db, 'config'), 'global');
           const cfgSnap = await getDoc(cfgRef);
           if (cfgSnap.exists()) {
-            const data = cfgSnap.data() as any;
+            const data = cfgSnap.data() as FirebaseConfigData;
             secureLogger.log('📋 Loaded config from Firebase:', data);
             
             if (Array.isArray(data.customEvents)) {
@@ -606,8 +641,6 @@ export const useWaveStore = create<WaveStore>()(
 
       // Load data from Firebase on app startup (with caching)
       loadAll: async () => {
-        const state = get();
-        
         // Always load fresh data from Firebase (no caching)
         secureLogger.log('🔄 Loading fresh data from Firebase...');
         
@@ -624,13 +657,11 @@ export const useWaveStore = create<WaveStore>()(
           
           const loaded: Record<string, Wave> = {};
           for (const waveDoc of wavesSnap.docs) {
-            const w = waveDoc.data() as any;
+            const w = waveDoc.data() as FirebaseWaveData;
             secureLogger.log(`🌊 Loading wave ${waveDoc.id}:`, w.name);
             
             // Load participants from subcollection
-            const participantsCol = collection(waveDoc.ref, 'participants');
-            const partsSnap = await getDocs(participantsCol);
-            const participants = partsSnap.docs.map((d) => ({ ...(d.data() as any) })) as any[];
+            const participants = await loadWaveParticipants(waveDoc.ref);
             
             secureLogger.log(`👥 Found ${participants.length} participants in wave ${waveDoc.id}`);
             
@@ -638,7 +669,7 @@ export const useWaveStore = create<WaveStore>()(
               id: waveDoc.id,
               name: w.name || waveDoc.id,
               startTime: w.startTime || '',
-              participants: participants as any,
+              participants,
             } as Wave;
           }
           
@@ -739,18 +770,16 @@ export const useWaveStore = create<WaveStore>()(
                 continue;
               }
               
-              const w = waveSnap.data() as any;
+              const w = waveSnap.data() as FirebaseWaveData;
               
               // Load participants from subcollection
-              const participantsCol = collection(waveRef, 'participants');
-              const partsSnap = await getDocs(participantsCol);
-              const participants = partsSnap.docs.map((d) => ({ ...(d.data() as any) })) as any[];
+              const participants = await loadWaveParticipants(waveRef);
               
               const firebaseWave = {
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
-                participants: participants,
+                participants,
               } as Wave;
               
               // Check if this wave has changed
@@ -825,18 +854,16 @@ export const useWaveStore = create<WaveStore>()(
                 continue;
               }
               
-              const w = waveSnap.data() as any;
+              const w = waveSnap.data() as FirebaseWaveData;
               
               // Load participants from subcollection
-              const participantsCol = collection(waveRef, 'participants');
-              const partsSnap = await getDocs(participantsCol);
-              const participants = partsSnap.docs.map((d) => ({ ...(d.data() as any) })) as any[];
+              const participants = await loadWaveParticipants(waveRef);
               
               const firebaseWave = {
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
-                participants: participants,
+                participants,
               } as Wave;
               
               // Check if this wave has changed
@@ -891,18 +918,16 @@ export const useWaveStore = create<WaveStore>()(
                 continue;
               }
               
-              const w = waveSnap.data() as any;
+              const w = waveSnap.data() as FirebaseWaveData;
               
               // Load participants from subcollection
-              const participantsCol = collection(waveRef, 'participants');
-              const partsSnap = await getDocs(participantsCol);
-              const participants = partsSnap.docs.map((d) => ({ ...(d.data() as any) })) as any[];
+              const participants = await loadWaveParticipants(waveRef);
               
               const firebaseWave = {
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
-                participants: participants,
+                participants,
               } as Wave;
               
               // Check if this wave has changed
@@ -1063,44 +1088,44 @@ export const useWaveStore = create<WaveStore>()(
         if (state) {
           // Set defaults for global config that will be loaded from Firebase
           // This prevents crashes while Firebase is loading
-          if (!(state as any).customEvents) {
-            (state as any).customEvents = WAVE_EVENTS;
+          if (!state.customEvents) {
+            state.customEvents = WAVE_EVENTS;
           }
-          if (!(state as any).intervalMinutes) {
-            (state as any).intervalMinutes = 5;
+          if (!state.intervalMinutes) {
+            state.intervalMinutes = 5;
           }
-          if (!(state as any).workMinutes) {
-            (state as any).workMinutes = 3;
+          if (!state.workMinutes) {
+            state.workMinutes = 3;
           }
-          if (!(state as any).restMinutes) {
-            (state as any).restMinutes = 2;
+          if (!state.restMinutes) {
+            state.restMinutes = 2;
           }
-          if (!(state as any).maxParticipants) {
-            (state as any).maxParticipants = 10;
+          if (!state.maxParticipants) {
+            state.maxParticipants = 10;
           }
-          if (!(state as any).workoutTimerWorkSeconds) {
-            (state as any).workoutTimerWorkSeconds = 60;
+          if (!state.workoutTimerWorkSeconds) {
+            state.workoutTimerWorkSeconds = 60;
           }
-          if (!(state as any).workoutTimerRestSeconds) {
-            (state as any).workoutTimerRestSeconds = 30;
+          if (!state.workoutTimerRestSeconds) {
+            state.workoutTimerRestSeconds = 30;
           }
-          if (!(state as any).eventStartDate) {
-            (state as any).eventStartDate = new Date().toISOString().split('T')[0];
+          if (!state.eventStartDate) {
+            state.eventStartDate = new Date().toISOString().split('T')[0];
           }
-          if (!(state as any).eventStartTime) {
-            (state as any).eventStartTime = '08:00';
+          if (!state.eventStartTime) {
+            state.eventStartTime = '08:00';
           }
-          if (!(state as any).totalWaves) {
-            (state as any).totalWaves = 30;
+          if (!state.totalWaves) {
+            state.totalWaves = 30;
           }
-          if (!(state as any).eventNotes) {
-            (state as any).eventNotes = '';
+          if (!state.eventNotes) {
+            state.eventNotes = '';
           }
-          if (!(state as any).accessPasscode) {
-            (state as any).accessPasscode = '54321Blastoff!';
+          if (!state.accessPasscode) {
+            state.accessPasscode = '54321Blastoff!';
           }
-          if (!(state as any).alertSettings) {
-            (state as any).alertSettings = {
+          if (!state.alertSettings) {
+            state.alertSettings = {
               workRestTransitions: true,
               eventStartEnd: true,
               soundType: 'beep',

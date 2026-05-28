@@ -33,7 +33,6 @@ export default function EventClock({
   const [currentPeriod, setCurrentPeriod] = useState<'work' | 'rest'>('work');
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [showAnimation, setShowAnimation] = useState(false);
-  const [animationType, setAnimationType] = useState<'start' | 'end' | 'transition' | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -65,7 +64,10 @@ export default function EventClock({
     if (typeof window === 'undefined') return;
     
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (AudioContextClass) {
+        audioContextRef.current = new AudioContextClass();
+      }
     }
     
     // Resume context if suspended (iOS requirement)
@@ -136,13 +138,11 @@ export default function EventClock({
   };
 
   // Trigger animation
-  const triggerAnimation = (type: 'start' | 'end' | 'transition') => {
+  const triggerAnimation = () => {
     if (!enableAlerts) return;
-    setAnimationType(type);
     setShowAnimation(true);
     setTimeout(() => {
       setShowAnimation(false);
-      setAnimationType(null);
     }, 1000);
   };
 
@@ -198,7 +198,7 @@ export default function EventClock({
         // Event start!
         if (secondsUntilStart === 0 && !hasPlayedEventStartRef.current) {
           playSound('airhorn');
-          triggerAnimation('start');
+          triggerAnimation();
           hasPlayedEventStartRef.current = true;
         }
       }
@@ -212,7 +212,6 @@ export default function EventClock({
       // Calculate position within interval
       const intervalSeconds = intervalMinutes * 60;
       const workSeconds = workMinutes * 60;
-      const restSeconds = restMinutes * 60;
       
       const positionInInterval = secondsElapsed % intervalSeconds;
       
@@ -228,7 +227,7 @@ export default function EventClock({
           lastBeepSecondRef.current = workRemaining;
         }
         if (alertSettings.workRestTransitions && workRemaining === 0 && lastBeepSecondRef.current !== 0) {
-          triggerAnimation('transition');
+          triggerAnimation();
           lastBeepSecondRef.current = 0;
         }
       } else {
@@ -243,7 +242,7 @@ export default function EventClock({
           lastBeepSecondRef.current = restRemaining;
         }
         if (alertSettings.workRestTransitions && restRemaining === 0 && lastBeepSecondRef.current !== 0) {
-          triggerAnimation('transition');
+          triggerAnimation();
           lastBeepSecondRef.current = 0;
         }
       }
@@ -254,10 +253,11 @@ export default function EventClock({
       // Event end
       if (alertSettings.eventStartEnd && !hasPlayedEventEndRef.current) {
         playSound('airhorn');
-        triggerAnimation('end');
+        triggerAnimation();
         hasPlayedEventEndRef.current = true;
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTime, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, alertSettings]);
 
   // Format time

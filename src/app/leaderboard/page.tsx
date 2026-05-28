@@ -20,7 +20,7 @@ interface ExerciseLeaderboard {
 export default function Leaderboard() {
   const [mounted, setMounted] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const { waves, customEvents, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, clearCacheAndReload, loadGlobalConfig, loadAll } = useWaveStore();
+  const { waves, customEvents, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, clearCacheAndReload, loadAll } = useWaveStore();
   const [exerciseLeaderboards, setExerciseLeaderboards] = useState<ExerciseLeaderboard[]>([]);
   const [totalLeaderboard, setTotalLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [expandedLeaderboard, setExpandedLeaderboard] = useState<string | null>(null);

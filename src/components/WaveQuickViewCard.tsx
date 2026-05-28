@@ -19,10 +19,9 @@ interface WaveQuickViewCardProps {
 }
 
 export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
-  const { setCurrentWave, deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, updateParticipantLeaderboardStatus } = useWaveStore();
+  const { deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, updateParticipantLeaderboardStatus } = useWaveStore();
   const [newName, setNewName] = useState('');
   const [timeHM, setTimeHM] = useState<string>('');
-  const [ampm, setAmPm] = useState<'AM' | 'PM'>('AM');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingName, setEditingName] = useState(wave.name);
 
@@ -32,7 +31,7 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
     console.log('🔍 WaveCard: Initializing time picker from wave.startTime:', s);
     const m = s.match(/^(\d{1,2}):(\d{2})(?:\s*([AaPp][Mm]))?$/);
     if (m) {
-      let h = parseInt(m[1], 10);
+      const h = parseInt(m[1], 10);
       const min = m[2];
       let mer: 'AM' | 'PM' = 'AM';
       if (m[3]) {
@@ -53,10 +52,8 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
       const hh24 = String(hour24).padStart(2, '0');
       console.log('🔍 WaveCard: Setting time picker to:', hh24 + ':' + min, '(from', h + ':' + min, mer + ')');
       setTimeHM(`${hh24}:${min}`);
-      setAmPm(mer);
     } else {
       setTimeHM('');
-      setAmPm('AM');
     }
   }, [wave.startTime]);
 
@@ -64,15 +61,6 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
   useEffect(() => {
     setEditingName(wave.name);
   }, [wave.name]);
-
-  const formatStoredTime = (hm: string, mer: 'AM' | 'PM') => {
-    const m = hm.match(/^(\d{1,2}):(\d{2})$/);
-    if (!m) return '';
-    const h = parseInt(m[1], 10);
-    const min = m[2];
-    if (Number.isNaN(h) || h < 1 || h > 12) return '';
-    return `${h}:${min} ${mer}`;
-  };
 
   const handleAddParticipant = async () => {
     if (newName.trim()) {
@@ -85,7 +73,7 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleAddParticipant();
     }
@@ -205,7 +193,6 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
               
               const stored = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
               console.log('🔍 WaveCard: Saving to Firebase:', stored);
-              setAmPm(period);
               updateWave(wave.id, { startTime: stored });
             }}
             className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -276,7 +263,7 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
           placeholder="Name"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyDown}
           className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
         />
         <button

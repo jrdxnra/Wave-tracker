@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useWaveStore } from '@/store/waveStore';
 import WaveQuickViewCard from '@/components/WaveQuickViewCard';
 import ConfigurationModal from '@/components/ConfigurationModal';
@@ -15,20 +14,16 @@ export default function Home() {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const {
     waves,
-    currentWaveId,
     eventNotes,
     accessPasscode,
     addWave,
-    setCurrentWave,
     setEventNotes,
     loadAll,
     syncWithFirebase,
     clearCacheAndReload,
-    forceUpdateAllParticipants,
   } = useWaveStore();
 
   const waveIds = Object.keys(waves);
-  const currentWave = currentWaveId ? waves[currentWaveId] : null;
 
   const handleManualSave = async () => {
     try {
@@ -57,7 +52,7 @@ export default function Home() {
     loadAll();
     
     // No automatic syncing on main page - only manual saves
-  }, []); // Empty dependency array - only run once on mount
+  }, [loadAll]); // Load once on mount
 
   // Manual save system - users save when ready using the Save Wave button
 
