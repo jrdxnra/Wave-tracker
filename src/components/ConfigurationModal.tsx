@@ -567,6 +567,31 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           </div>
         </div>
 
+        {movementTimingModeLocal === 'global' && (
+          <div className="mb-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Work (min)</label>
+              <input
+                type="number"
+                min={0}
+                value={work}
+                onChange={(e) => setWork(parseInt(e.target.value || '0', 10))}
+                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rest / Transition (min)</label>
+              <input
+                type="number"
+                min={0}
+                value={rest}
+                onChange={(e) => setRest(parseInt(e.target.value || '0', 10))}
+                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              />
+            </div>
+          </div>
+        )}
+
         {/* Add New Movement */}
         <div key={selectedEventId} className="mb-4 w-full">
           <div className="flex items-center gap-2 mb-1">
@@ -848,7 +873,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       <div className="space-y-6" ref={emojiPickerRef}>
         <div>
           <div className="grid grid-cols-1 gap-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+            <div className="grid grid-cols-2 gap-4 items-start">
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-1">Event Title *</h3>
                 <input
@@ -860,7 +885,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between gap-3 mb-1">
+                <div className="mb-1">
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-medium text-gray-900">Event Clock Settings</h3>
                     {renderInfoTip(
@@ -868,6 +893,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                       'Event Clock tips'
                     )}
                   </div>
+                </div>
+                <div>
                   <button
                     type="button"
                     onClick={() => {
@@ -882,30 +909,6 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                     {eventClockEnabled ? 'Disable Clock' : 'Enable Clock'}
                   </button>
                 </div>
-                {movementTimingModeLocal === 'global' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Work (min)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={work}
-                        onChange={(e) => setWork(parseInt(e.target.value || '0', 10))}
-                        className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Rest / Transition (min)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={rest}
-                        onChange={(e) => setRest(parseInt(e.target.value || '0', 10))}
-                        className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
             <div>
