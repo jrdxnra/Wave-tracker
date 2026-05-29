@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useWaveStore } from '@/store/waveStore';
+import { clientHasMounted, markClientMounted } from '@/lib/clientMounted';
 import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
 import ConfigurationModal from '@/components/ConfigurationModal';
 import EventTimeline from '@/components/EventTimeline';
@@ -18,7 +19,7 @@ interface ExerciseLeaderboard {
 }
 
 export default function Leaderboard() {
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(clientHasMounted);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
   const { waves, customEvents, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, eventBranding, clearCacheAndReload, loadAll } = useWaveStore();
@@ -28,6 +29,7 @@ export default function Leaderboard() {
   const [showAllLeaderboards, setShowAllLeaderboards] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    markClientMounted();
     setMounted(true);
     // Load fresh global config AND wave data from Firebase on page load
     loadAll();

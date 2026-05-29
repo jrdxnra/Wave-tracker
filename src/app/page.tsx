@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useWaveStore } from '@/store/waveStore';
+import { clientHasMounted, markClientMounted } from '@/lib/clientMounted';
 import WaveQuickViewCard from '@/components/WaveQuickViewCard';
 import ConfigurationModal from '@/components/ConfigurationModal';
 import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
@@ -11,7 +12,7 @@ import { getFirebase } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
 export default function Page() {
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(clientHasMounted);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
   const {
@@ -48,6 +49,7 @@ export default function Page() {
   };
 
   useEffect(() => {
+    markClientMounted();
     setMounted(true);
     // Load data from Firebase on startup.
     loadAll();

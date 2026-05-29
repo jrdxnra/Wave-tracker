@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWaveStore } from '@/store/waveStore';
+import { clientHasMounted, markClientMounted } from '@/lib/clientMounted';
 import PerformanceTable from '@/components/PerformanceTable';
 import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
 import ConfigurationModal from '@/components/ConfigurationModal';
@@ -12,7 +13,7 @@ import PasscodeProtection from '@/components/PasscodeProtection';
 export default function PerformancePage() {
   const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, eventBranding, activeEventId, eventClockEnabled, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, loadAll, setUserActivity, isDataLoaded } = useWaveStore();
 
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(clientHasMounted);
   // Pre-initialize as complete when store already has data (instant page transitions)
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(isDataLoaded);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -27,6 +28,7 @@ export default function PerformancePage() {
 
   useEffect(() => {
     let isCancelled = false;
+    markClientMounted();
     setMounted(true);
     (async () => {
       await loadAll();
