@@ -100,17 +100,33 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
   const [isSwitchingEvent, setIsSwitchingEvent] = useState(false);
+  const [isHydratingConfig, setIsHydratingConfig] = useState(false);
   const [isAddButtonHover, setIsAddButtonHover] = useState(false);
   const [isEventSelectFocused, setIsEventSelectFocused] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
 
   // Load fresh config from Firebase when modal opens and sync local state
   useEffect(() => {
-    if (isOpen) {
-      setActiveTab(initialTab);
-      loadEventsCatalog();
-      loadGlobalConfig();
-    }
+    if (!isOpen) return;
+
+    let isCancelled = false;
+    setActiveTab(initialTab);
+    setIsHydratingConfig(true);
+
+    void (async () => {
+      try {
+        await loadEventsCatalog();
+        await loadGlobalConfig();
+      } finally {
+        if (!isCancelled) {
+          setIsHydratingConfig(false);
+        }
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [isOpen, initialTab, loadGlobalConfig, loadEventsCatalog]);
 
   // Sync local state whenever store values change
@@ -167,7 +183,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   }, [isOpen, activeEventId, eventBranding, movementTimingMode, isCreatingNewEvent]);
 
   const handleSave = async () => {
-    if (isSwitchingEvent) return;
+    if (isSwitchingEvent || isHydratingConfig) return;
     setIsSaving(true);
     try {
       if (isCreatingNewEvent) {
@@ -456,7 +472,14 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   }, []);
 
   let tabContent: JSX.Element | null = null;
-  if (activeTab === 'security') {
+  if (isHydratingConfig) {
+    tabContent = (
+      <div className="py-8 text-center">
+        <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-b-2 border-[var(--accent-color)]" />
+        <p className="text-sm text-gray-600">Loading event settings...</p>
+      </div>
+    );
+  } else if (activeTab === 'security') {
     tabContent = (
       <div className="space-y-6">
         <div>
@@ -889,31 +912,27 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   required
                 />
               </div>
-              <div>
-                <div className="mb-1">
-                  <div className="flex items-center gap-2">
+              <div className="flex flex-col items-start gap-2">
+                <div className="flex items-center gap-2">
                     <h3 className="text-lg font-medium text-gray-900">Event Clock Settings</h3>
                     {renderInfoTip(
                       'Wave Start Interval: Time between each wave starting (e.g., Wave 1 at 8:00, Wave 2 at 8:10).\nWork + Rest: Duration of each movement station. Movement times on performance/print sheets are calculated using Work + Rest.',
                       'Event Clock tips'
                     )}
-                  </div>
                 </div>
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void setEventClockEnabled(!eventClockEnabled);
-                    }}
-                    className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                      eventClockEnabled
-                        ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
-                        : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
-                    }`}
-                  >
-                    {eventClockEnabled ? 'Disable Clock' : 'Enable Clock'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void setEventClockEnabled(!eventClockEnabled);
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                    eventClockEnabled
+                      ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
+                      : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                  }`}
+                >
+                  {eventClockEnabled ? 'Disable Clock' : 'Enable Clock'}
+                </button>
               </div>
             </div>
             <div>
@@ -1134,7 +1153,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   console.error('❌ Error calling handleSave:', error);
                 }
               }}
-              disabled={isSaving || isSwitchingEvent || !brandTitle.trim()}
+              disabled={isSaving || isSwitchingEvent || isHydratingConfig || !brandTitle.trim()}
               className="flex-1 sm:flex-none px-4 py-2 sm:px-6 sm:py-3 text-white border-2 rounded-lg transition-all active:scale-95 font-semibold"
               style={{
                 backgroundColor: eventBranding?.customGradient?.mid || eventBranding?.customColor || '#ea580c',
