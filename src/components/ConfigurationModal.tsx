@@ -17,6 +17,9 @@ type GradientPreset = {
   end: string;
 };
 
+type EditableMinutes = number | '';
+type EditableMovementIntervals = Record<string, { workMinutes: EditableMinutes; restMinutes: EditableMinutes }>;
+
 const THEME_GRADIENT_PRESETS: Record<BrandTheme, { start: string; mid: string; end: string }> = {
   orange: { start: '#ea580c', mid: '#f97316', end: '#fbbf24' },
   blue: { start: '#1d4ed8', mid: '#2563eb', end: '#38bdf8' },
@@ -42,6 +45,34 @@ function normalizeHexColor(color: string, fallback: string): string {
 
 function getDefaultGradient(theme: BrandTheme) {
   return THEME_GRADIENT_PRESETS[theme] || THEME_GRADIENT_PRESETS.orange;
+}
+
+function parseEditableMinutes(value: string): EditableMinutes {
+  if (value === '') return '';
+  return Math.max(0, parseInt(value, 10) || 0);
+}
+
+function normalizeMinutes(value: EditableMinutes): number {
+  return Math.max(0, Number(value) || 0);
+}
+
+function normalizeMovementIntervals(
+  intervals: EditableMovementIntervals,
+  fallbackWork: EditableMinutes,
+  fallbackRest: EditableMinutes,
+): Record<string, { workMinutes: number; restMinutes: number }> {
+  const normalizedFallbackWork = normalizeMinutes(fallbackWork);
+  const normalizedFallbackRest = normalizeMinutes(fallbackRest);
+
+  return Object.fromEntries(
+    Object.entries(intervals).map(([movementName, values]) => [
+      movementName,
+      {
+        workMinutes: values.workMinutes === '' ? normalizedFallbackWork : normalizeMinutes(values.workMinutes),
+        restMinutes: values.restMinutes === '' ? normalizedFallbackRest : normalizeMinutes(values.restMinutes),
+      },
+    ])
+  );
 }
 
 interface ConfigurationModalProps {
@@ -70,10 +101,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [events, setEvents] = useState<string[]>(customEvents);
   const [newEvent, setNewEvent] = useState('');
   const [interval, setInterval] = useState<number>(intervalMinutes);
-  const [work, setWork] = useState<number>(workMinutes);
-  const [rest, setRest] = useState<number>(restMinutes);
+  const [work, setWork] = useState<EditableMinutes>(workMinutes);
+  const [rest, setRest] = useState<EditableMinutes>(restMinutes);
   const [movementTimingModeLocal, setMovementTimingModeLocal] = useState<'global' | 'individual'>(movementTimingMode);
-  const [movementIntervalsLocal, setMovementIntervalsLocal] = useState<Record<string, { workMinutes: number; restMinutes: number }>>(movementIntervals);
+  const [movementIntervalsLocal, setMovementIntervalsLocal] = useState<EditableMovementIntervals>(movementIntervals);
   const [maxParticipantsLocal, setMaxParticipantsLocal] = useState<number>(maxParticipants);
   const [timerWorkSeconds, setTimerWorkSeconds] = useState<number>(workoutTimerWorkSeconds);
   const [timerRestSeconds, setTimerRestSeconds] = useState<number>(workoutTimerRestSeconds);
@@ -148,12 +179,12 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
   useEffect(() => {
     setMovementIntervalsLocal((prev) => {
-      const next: Record<string, { workMinutes: number; restMinutes: number }> = {};
+      const next: EditableMovementIntervals = {};
       for (const movementName of events) {
         const existing = prev[movementName] || movementIntervals[movementName];
         next[movementName] = {
-          workMinutes: Math.max(0, Number(existing?.workMinutes) || Math.max(0, Math.round(work))),
-          restMinutes: Math.max(0, Number(existing?.restMinutes) || Math.max(0, Math.round(rest))),
+          workMinutes: existing?.workMinutes === '' ? '' : Math.max(0, Number(existing?.workMinutes) || normalizeMinutes(work)),
+          restMinutes: existing?.restMinutes === '' ? '' : Math.max(0, Number(existing?.restMinutes) || normalizeMinutes(rest)),
         };
       }
       return next;
@@ -201,16 +232,16 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
             events.map((movementName) => [
               movementName,
               {
-                workMinutes: Math.max(0, Math.round(work)),
-                restMinutes: Math.max(0, Math.round(rest)),
+                workMinutes: normalizeMinutes(work),
+                restMinutes: normalizeMinutes(rest),
               },
             ])
           ) as Record<string, { workMinutes: number; restMinutes: number }>;
 
           await setTimingConfig(
             Math.max(1, Math.round(interval)),
-            Math.max(0, Math.round(work)),
-            Math.max(0, Math.round(rest)),
+            normalizeMinutes(work),
+            normalizeMinutes(rest),
             newEventMovementTimingMode,
             newEventMovementTimingMode === 'individual' ? perMovementDefaults : {}
           );
@@ -245,10 +276,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
       await setTimingConfig(
         Math.max(1, Math.round(interval)),
-        Math.max(0, Math.round(work)),
-        Math.max(0, Math.round(rest)),
+        normalizeMinutes(work),
+        normalizeMinutes(rest),
         movementTimingModeLocal,
-        movementIntervalsLocal
+        normalizeMovementIntervals(movementIntervalsLocal, work, rest)
       );
       await setMaxParticipants(maxParticipantsLocal);
       await setWorkoutTimerConfig(Math.max(1, Math.round(timerWorkSeconds)), Math.max(1, Math.round(timerRestSeconds)));
@@ -603,7 +634,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 type="number"
                 min={0}
                 value={work}
-                onChange={(e) => setWork(parseInt(e.target.value || '0', 10))}
+                onChange={(e) => setWork(parseEditableMinutes(e.target.value))}
+                onBlur={() => setWork((current) => normalizeMinutes(current))}
                 className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
               />
             </div>
@@ -613,7 +645,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 type="number"
                 min={0}
                 value={rest}
-                onChange={(e) => setRest(parseInt(e.target.value || '0', 10))}
+                onChange={(e) => setRest(parseEditableMinutes(e.target.value))}
+                onBlur={() => setRest((current) => normalizeMinutes(current))}
                 className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
               />
             </div>
@@ -674,8 +707,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           <div className="space-y-2">
             {events.map((movementName, index) => {
               const movementTiming = movementIntervalsLocal[movementName] || {
-                workMinutes: Math.max(0, Math.round(work)),
-                restMinutes: Math.max(0, Math.round(rest)),
+                workMinutes: normalizeMinutes(work),
+                restMinutes: normalizeMinutes(rest),
               };
               const duplicateName = events.some(
                 (existingName, existingIndex) =>
@@ -714,11 +747,20 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                         min={0}
                         value={movementTiming.workMinutes}
                         onChange={(e) => {
-                          const nextWork = Math.max(0, parseInt(e.target.value || '0', 10));
+                          const nextWork = parseEditableMinutes(e.target.value);
                           setMovementIntervalsLocal((prev) => ({
                             ...prev,
                             [movementName]: {
                               workMinutes: nextWork,
+                              restMinutes: prev[movementName]?.restMinutes ?? movementTiming.restMinutes,
+                            },
+                          }));
+                        }}
+                        onBlur={() => {
+                          setMovementIntervalsLocal((prev) => ({
+                            ...prev,
+                            [movementName]: {
+                              workMinutes: normalizeMinutes(prev[movementName]?.workMinutes ?? movementTiming.workMinutes),
                               restMinutes: prev[movementName]?.restMinutes ?? movementTiming.restMinutes,
                             },
                           }));
@@ -732,12 +774,21 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                         min={0}
                         value={movementTiming.restMinutes}
                         onChange={(e) => {
-                          const nextRest = Math.max(0, parseInt(e.target.value || '0', 10));
+                          const nextRest = parseEditableMinutes(e.target.value);
                           setMovementIntervalsLocal((prev) => ({
                             ...prev,
                             [movementName]: {
                               workMinutes: prev[movementName]?.workMinutes ?? movementTiming.workMinutes,
                               restMinutes: nextRest,
+                            },
+                          }));
+                        }}
+                        onBlur={() => {
+                          setMovementIntervalsLocal((prev) => ({
+                            ...prev,
+                            [movementName]: {
+                              workMinutes: prev[movementName]?.workMinutes ?? movementTiming.workMinutes,
+                              restMinutes: normalizeMinutes(prev[movementName]?.restMinutes ?? movementTiming.restMinutes),
                             },
                           }));
                         }}
