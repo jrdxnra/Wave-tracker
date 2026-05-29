@@ -143,6 +143,8 @@ function buildDefaultEventConfig(title: string, date = new Date()): FirebaseConf
       intervalMinutes: 5,
       workMinutes: 3,
       restMinutes: 2,
+      movementMode: 'global',
+      movementIntervals: {},
     },
     eventNotes: '',
     maxParticipants: 10,
@@ -269,6 +271,8 @@ async function ensureDefaultEventConfigExists(db: Firestore): Promise<void> {
       intervalMinutes: 5,
       workMinutes: 3,
       restMinutes: 2,
+      movementMode: 'global',
+      movementIntervals: {},
     },
     eventNotes: '',
     maxParticipants: 10,
@@ -333,6 +337,8 @@ interface FirebaseConfigData {
     intervalMinutes?: number;
     workMinutes?: number;
     restMinutes?: number;
+    movementMode?: 'global' | 'individual';
+    movementIntervals?: Record<string, { workMinutes?: number; restMinutes?: number }>;
   };
   eventNotes?: string;
   maxParticipants?: number;
@@ -361,6 +367,9 @@ interface FirebaseWaveData {
   startTime?: string;
 }
 
+type MovementTimingMode = 'global' | 'individual';
+type MovementIntervals = Record<string, { workMinutes: number; restMinutes: number }>;
+
 interface WaveStore {
   activeEventId: string;
   eventsCatalog: EventSummary[];
@@ -373,6 +382,8 @@ interface WaveStore {
   intervalMinutes: number;
   workMinutes: number;
   restMinutes: number;
+  movementTimingMode: MovementTimingMode;
+  movementIntervals: MovementIntervals;
   maxParticipants: number;
   workoutTimerWorkSeconds: number;
   workoutTimerRestSeconds: number;
@@ -409,7 +420,13 @@ interface WaveStore {
 
   setEventNotes: (notes: string) => void;
   updateWaveEvents: (events: string[]) => Promise<void>;
-  setTimingConfig: (intervalMinutes: number, workMinutes: number, restMinutes: number) => Promise<void>;
+  setTimingConfig: (
+    intervalMinutes: number,
+    workMinutes: number,
+    restMinutes: number,
+    movementTimingMode?: MovementTimingMode,
+    movementIntervals?: MovementIntervals
+  ) => Promise<void>;
   setMaxParticipants: (maxParticipants: number) => Promise<void>;
   setWorkoutTimerConfig: (workSeconds: number, restSeconds: number) => Promise<void>;
   setEventConfig: (startDate: string, startTime: string, totalWaves: number) => Promise<void>;
@@ -462,6 +479,8 @@ export const useWaveStore = create<WaveStore>()(
       intervalMinutes: 5,
       workMinutes: 3,
       restMinutes: 2,
+      movementTimingMode: 'global',
+      movementIntervals: {},
       maxParticipants: 10,
       workoutTimerWorkSeconds: 60,
       workoutTimerRestSeconds: 30,
@@ -713,8 +732,8 @@ export const useWaveStore = create<WaveStore>()(
 
       setEventNotes: (notes) => set({ eventNotes: notes }),
       
-      setTimingConfig: async (intervalMinutes, workMinutes, restMinutes) => {
-        set({ intervalMinutes, workMinutes, restMinutes });
+      setTimingConfig: async (intervalMinutes, workMinutes, restMinutes, movementTimingMode = 'global', movementIntervals = {}) => {
+        set({ intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals });
         
         // Save to Firebase immediately
         try {
@@ -724,7 +743,9 @@ export const useWaveStore = create<WaveStore>()(
             timing: {
               intervalMinutes,
               workMinutes,
-              restMinutes
+              restMinutes,
+              movementMode: movementTimingMode,
+              movementIntervals,
             },
             updatedAt: new Date().toISOString()
           }, { merge: true });
@@ -1151,6 +1172,8 @@ export const useWaveStore = create<WaveStore>()(
             intervalMinutes: s.intervalMinutes,
             workMinutes: s.workMinutes,
             restMinutes: s.restMinutes,
+            movementMode: s.movementTimingMode,
+            movementIntervals: s.movementIntervals,
           },
           eventNotes: s.eventNotes,
           maxParticipants: s.maxParticipants,
@@ -1222,11 +1245,22 @@ export const useWaveStore = create<WaveStore>()(
               set({ customEvents: data.customEvents as string[] });
             }
             if (data.timing) {
-              const { intervalMinutes, workMinutes, restMinutes } = data.timing;
+              const { intervalMinutes, workMinutes, restMinutes, movementMode, movementIntervals } = data.timing;
+              const normalizedIntervals = Object.fromEntries(
+                Object.entries(movementIntervals || {}).map(([movementName, values]) => [
+                  movementName,
+                  {
+                    workMinutes: Math.max(0, Number(values?.workMinutes) || 0),
+                    restMinutes: Math.max(0, Number(values?.restMinutes) || 0),
+                  },
+                ])
+              ) as MovementIntervals;
               set({
                 intervalMinutes: Number(intervalMinutes) || 5,
                 workMinutes: Number(workMinutes) || 3,
                 restMinutes: Number(restMinutes) || 2,
+                movementTimingMode: movementMode === 'individual' ? 'individual' : 'global',
+                movementIntervals: normalizedIntervals,
               });
             }
             if (typeof data.eventNotes === 'string') {
@@ -1323,24 +1357,29 @@ export const useWaveStore = create<WaveStore>()(
           const wavesSnap = await getDocs(wavesCol);
           
           secureLogger.log(`🌊 Found ${wavesSnap.docs.length} waves in Firebase`);
-          
-          const loaded: Record<string, Wave> = {};
-          for (const waveDoc of wavesSnap.docs) {
-            const w = waveDoc.data() as FirebaseWaveData;
-            secureLogger.log(`🌊 Loading wave ${waveDoc.id}:`, w.name);
-            
-            // Load participants from subcollection
-            const participants = await loadWaveParticipants(waveDoc.ref);
-            
-            secureLogger.log(`👥 Found ${participants.length} participants in wave ${waveDoc.id}`);
-            
-            loaded[waveDoc.id] = {
-              id: waveDoc.id,
-              name: w.name || waveDoc.id,
-              startTime: w.startTime || '',
-              participants,
-            } as Wave;
-          }
+
+          const loadedEntries = await Promise.all(
+            wavesSnap.docs.map(async (waveDoc) => {
+              const w = waveDoc.data() as FirebaseWaveData;
+              secureLogger.log(`🌊 Loading wave ${waveDoc.id}:`, w.name);
+
+              const participants = await loadWaveParticipants(waveDoc.ref);
+
+              secureLogger.log(`👥 Found ${participants.length} participants in wave ${waveDoc.id}`);
+
+              return [
+                waveDoc.id,
+                {
+                  id: waveDoc.id,
+                  name: w.name || waveDoc.id,
+                  startTime: w.startTime || '',
+                  participants,
+                } as Wave,
+              ] as const;
+            })
+          );
+
+          const loaded = Object.fromEntries(loadedEntries) as Record<string, Wave>;
           
           secureLogger.log(`✅ Loaded ${Object.keys(loaded).length} waves total`);
           
@@ -1784,6 +1823,12 @@ export const useWaveStore = create<WaveStore>()(
           }
           if (!state.restMinutes) {
             state.restMinutes = 2;
+          }
+          if (!state.movementTimingMode) {
+            state.movementTimingMode = 'global';
+          }
+          if (!state.movementIntervals) {
+            state.movementIntervals = {};
           }
           if (!state.maxParticipants) {
             state.maxParticipants = 10;

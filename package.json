@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "emulator": "firebase emulators:start",
     "dev:local": "concurrently \"firebase emulators:start\" \"npm run dev\"",
     "deploy": "npm run deploy:dev",

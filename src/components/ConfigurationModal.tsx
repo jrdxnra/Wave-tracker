@@ -57,6 +57,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const { 
     customEvents, updateWaveEvents, intervalMinutes, workMinutes, restMinutes, maxParticipants, 
     workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode,
+    movementTimingMode, movementIntervals,
     setTimingConfig, setMaxParticipants, setWorkoutTimerConfig, setEventConfig, setAccessPasscode,
     loadGlobalConfig, eventBranding, eventClockEnabled, setEventClockEnabled, themeColors,
     eventsCatalog, activeEventId, loadEventsCatalog, createEvent, deleteEvent, setActiveEvent, updateEventBranding
@@ -71,6 +72,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [interval, setInterval] = useState<number>(intervalMinutes);
   const [work, setWork] = useState<number>(workMinutes);
   const [rest, setRest] = useState<number>(restMinutes);
+  const [movementTimingModeLocal, setMovementTimingModeLocal] = useState<'global' | 'individual'>(movementTimingMode);
+  const [movementIntervalsLocal, setMovementIntervalsLocal] = useState<Record<string, { workMinutes: number; restMinutes: number }>>(movementIntervals);
   const [maxParticipantsLocal, setMaxParticipantsLocal] = useState<number>(maxParticipants);
   const [timerWorkSeconds, setTimerWorkSeconds] = useState<number>(workoutTimerWorkSeconds);
   const [timerRestSeconds, setTimerRestSeconds] = useState<number>(workoutTimerRestSeconds);
@@ -80,9 +83,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [passcode, setPasscode] = useState<string>(accessPasscode);
 
   const [newEventName, setNewEventName] = useState('');
-  const [newEventStartDate, setNewEventStartDate] = useState<string>(eventStartDate);
-  const [newEventStartTime, setNewEventStartTime] = useState<string>(eventStartTime);
-  const [newEventTotalWaves, setNewEventTotalWaves] = useState<number>(totalWaves);
+  const [newEventMovementTimingMode, setNewEventMovementTimingMode] = useState<'global' | 'individual'>('global');
   const [brandTitle, setBrandTitle] = useState<string>(eventBranding.title);
   const [brandEmojiLeft, setBrandEmojiLeft] = useState<string>(eventBranding.emojiLeft);
   const [brandEmojiRight, setBrandEmojiRight] = useState<string>(eventBranding.emojiRight);
@@ -117,6 +118,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setInterval(intervalMinutes);
     setWork(workMinutes);
     setRest(restMinutes);
+    setMovementTimingModeLocal(movementTimingMode);
+    setMovementIntervalsLocal(movementIntervals);
     setMaxParticipantsLocal(maxParticipants);
     setTimerWorkSeconds(workoutTimerWorkSeconds);
     setTimerRestSeconds(workoutTimerRestSeconds);
@@ -124,7 +127,21 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setStartTime(eventStartTime);
     setWaves(totalWaves);
     setPasscode(accessPasscode);
-  }, [customEvents, intervalMinutes, workMinutes, restMinutes, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode]);
+  }, [customEvents, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode]);
+
+  useEffect(() => {
+    setMovementIntervalsLocal((prev) => {
+      const next: Record<string, { workMinutes: number; restMinutes: number }> = {};
+      for (const movementName of events) {
+        const existing = prev[movementName] || movementIntervals[movementName];
+        next[movementName] = {
+          workMinutes: Math.max(0, Number(existing?.workMinutes) || Math.max(0, Math.round(work))),
+          restMinutes: Math.max(0, Number(existing?.restMinutes) || Math.max(0, Math.round(rest))),
+        };
+      }
+      return next;
+    });
+  }, [events, movementIntervals, work, rest]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -136,12 +153,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setGradientStart(eventBranding.customGradient?.start || fallbackGradient.start);
     setGradientMid(eventBranding.customGradient?.mid || fallbackGradient.mid);
     setGradientEnd(eventBranding.customGradient?.end || fallbackGradient.end);
-    setNewEventStartDate(eventStartDate);
-    setNewEventStartTime(eventStartTime);
-    setNewEventTotalWaves(totalWaves);
     setNewEventName('');
+    setNewEventMovementTimingMode(movementTimingMode);
     setOpenEmojiPicker(null);
-  }, [isOpen, activeEventId, eventBranding]);
+  }, [isOpen, activeEventId, eventBranding, movementTimingMode]);
 
   useEffect(() => {
     if (!isCreatingNewEvent) return;
@@ -154,29 +169,43 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setGradientMid(defaultGradient.mid);
     setGradientEnd(defaultGradient.end);
     setNewEventName('');
+    setNewEventMovementTimingMode('global');
   }, [isCreatingNewEvent, eventBranding.theme]);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      if (!brandTitle.trim()) {
-        alert('Brand Title is required before saving.');
-        return;
-      }
-
       if (isCreatingNewEvent) {
-        const createdEventName = newEventName.trim() || brandTitle.trim();
+        const createdEventName = newEventName.trim();
+        if (!createdEventName) {
+          alert('Event Name is required before creating an event.');
+          return;
+        }
+
         await createEvent(createdEventName);
 
         const createdEventId = useWaveStore.getState().activeEventId;
         if (createdEventId) {
-          await setEventConfig(
-            newEventStartDate || startDate,
-            newEventStartTime || startTime,
-            Math.max(1, Math.round(newEventTotalWaves || waves || 1))
+          const perMovementDefaults = Object.fromEntries(
+            events.map((movementName) => [
+              movementName,
+              {
+                workMinutes: Math.max(0, Math.round(work)),
+                restMinutes: Math.max(0, Math.round(rest)),
+              },
+            ])
+          ) as Record<string, { workMinutes: number; restMinutes: number }>;
+
+          await setTimingConfig(
+            Math.max(1, Math.round(interval)),
+            Math.max(0, Math.round(work)),
+            Math.max(0, Math.round(rest)),
+            newEventMovementTimingMode,
+            newEventMovementTimingMode === 'individual' ? perMovementDefaults : {}
           );
+
           await updateEventBranding({
-            title: brandTitle.trim(),
+            title: createdEventName,
             emojiLeft: brandEmojiLeft.trim(),
             emojiRight: brandEmojiRight.trim(),
             customGradient: {
@@ -194,12 +223,23 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         return;
       }
 
+      if (!brandTitle.trim()) {
+        alert('Event Title is required before saving.');
+        return;
+      }
+
       const eventsChanged = JSON.stringify(events) !== JSON.stringify(customEvents);
       if (eventsChanged) {
         await updateWaveEvents(events);
       }
 
-      await setTimingConfig(Math.max(1, Math.round(interval)), Math.max(0, Math.round(work)), Math.max(0, Math.round(rest)));
+      await setTimingConfig(
+        Math.max(1, Math.round(interval)),
+        Math.max(0, Math.round(work)),
+        Math.max(0, Math.round(rest)),
+        movementTimingModeLocal,
+        movementIntervalsLocal
+      );
       await setMaxParticipants(maxParticipantsLocal);
       await setWorkoutTimerConfig(Math.max(1, Math.round(timerWorkSeconds)), Math.max(1, Math.round(timerRestSeconds)));
       await setEventConfig(startDate, startTime, Math.max(1, Math.round(waves)));
@@ -346,6 +386,53 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     </div>
   );
 
+  const renderInfoTip = (tipText: string, label: string) => (
+    <span className="relative inline-flex group">
+      <button
+        type="button"
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[10px] font-semibold text-gray-600 cursor-help"
+        aria-label={label}
+      >
+        i
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-72 -translate-x-1/2 rounded-md border border-gray-200 bg-white p-2 text-xs text-gray-800 shadow-md opacity-0 transition-opacity duration-150 whitespace-pre-line group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        <span className="space-y-1 block">
+          {tipText.split('\n').map((rawLine, index) => {
+            const line = rawLine.trim();
+            if (!line) return null;
+
+            const colonIndex = line.indexOf(':');
+            let lead = '';
+            let rest = '';
+
+            if (colonIndex > 0) {
+              lead = line.slice(0, colonIndex + 1);
+              rest = line.slice(colonIndex + 1).trim();
+            } else {
+              const firstSpaceIndex = line.indexOf(' ');
+              if (firstSpaceIndex > 0) {
+                lead = line.slice(0, firstSpaceIndex);
+                rest = line.slice(firstSpaceIndex + 1).trim();
+              } else {
+                lead = line;
+              }
+            }
+
+            return (
+              <span key={`${label}-${index}`} className="block">
+                <span className="font-semibold">{lead}</span>
+                {rest ? ` ${rest}` : ''}
+              </span>
+            );
+          })}
+        </span>
+      </span>
+    </span>
+  );
+
 
   // Close modal on outside click
   const modalRef = useRef<HTMLDivElement | null>(null);
@@ -419,40 +506,62 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   } else if (activeTab === 'movement') {
     tabContent = (
       <>
-        {/* Tips moved to the top (condensed) */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
-          <h4 className="text-[11px] font-semibold text-blue-900 mb-1 uppercase tracking-wide">Tips</h4>
-          <ul className="text-[13px] text-blue-700 space-y-1 list-disc pl-5">
-            <li>Changes will apply to all waves and participants</li>
-            <li><strong>Wave Start Interval:</strong> Time between each wave starting (e.g., Wave 1 at 8:00, Wave 2 at 8:10)</li>
-            <li><strong>Work + Rest:</strong> Duration of each movement station. Movement times on performance/print sheets are calculated using Work + Rest.</li>
-          </ul>
-        </div>
-
-        <div className="mb-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Edit Current Event</h3>
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-lg font-medium text-gray-900">Edit Current Event</h3>
+            {renderInfoTip(
+              'Changes will apply to all waves and participants.',
+              'Edit Current Event tips'
+            )}
+          </div>
           <p className="text-sm text-gray-600">This section controls the active event schedule and wave movement setup.</p>
         </div>
 
-        <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Event Start Date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Event Start Time</label>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Total Waves</label>
+            <input
+              type="number"
+              min={1}
+              value={waves}
+              onChange={(e) => setWaves(parseInt(e.target.value || '1', 10))}
+              className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Wave Start Interval (min)</label>
-            <input type="number" min={1} value={interval} onChange={(e) => setInterval(parseInt(e.target.value || '0', 10))} className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Work (min)</label>
-            <input type="number" min={0} value={work} onChange={(e) => setWork(parseInt(e.target.value || '0', 10))} className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Rest / Transition (min)</label>
-            <input type="number" min={0} value={rest} onChange={(e) => setRest(parseInt(e.target.value || '0', 10))} className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]" />
+            <input
+              type="number"
+              min={1}
+              value={interval}
+              onChange={(e) => setInterval(parseInt(e.target.value || '1', 10))}
+              className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Max Participants</label>
             <select
               value={maxParticipantsLocal}
               onChange={(e) => setMaxParticipantsLocal(parseInt(e.target.value))}
-              className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)] bg-white"
+              className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)] bg-white"
             >
               <option value={5}>5</option>
               <option value={6}>6</option>
@@ -469,86 +578,30 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           </div>
         </div>
 
-        {/* Event Clock Settings */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h3 className="text-lg font-medium text-gray-900">Event Clock Settings</h3>
-            <button
-              type="button"
-              onClick={() => {
-                void setEventClockEnabled(!eventClockEnabled);
-              }}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                eventClockEnabled
-                  ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
-                  : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
-              }`}
-            >
-              {eventClockEnabled ? 'Disable Clock' : 'Enable Clock'}
-            </button>
-          </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-3">
-            <h4 className="text-[11px] font-semibold text-blue-900 mb-1 uppercase tracking-wide">Tips</h4>
-            <p className="text-[13px] text-blue-700">Configure the universal event clock that all coaches use to stay synchronized. The clock uses the Interval, Work, and Rest times above to calculate work/rest periods.</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Event Start Date</label>
-              <input 
-                type="date" 
-                value={startDate} 
-                onChange={(e) => setStartDate(e.target.value)} 
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]" 
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Event Start Time</label>
-              <input 
-                type="time" 
-                value={startTime} 
-                onChange={(e) => setStartTime(e.target.value)} 
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]" 
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Total Waves</label>
-              <input 
-                type="number" 
-                min={1} 
-                value={waves} 
-                onChange={(e) => setWaves(parseInt(e.target.value || '1', 10))} 
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]" 
-              />
-            </div>
-          </div>
-        </div>
-
         {/* Add New Movement */}
-        <div className="mb-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-3">Add New Movement</h3>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-3">
-            <h4 className="text-[11px] font-semibold text-blue-900 mb-1 uppercase tracking-wide">Tips</h4>
-            <ul className="text-[13px] text-blue-700 space-y-1 list-disc pl-5">
-              <li>When you add a new movement, a blank cell is created for that movement for every participant so you can fill it later. Existing values in other movements are not changed.</li>
-              <li>Add hyphens (-) in movement names to control text wrapping in print</li>
-              <li>Example: &quot;BURPEE-BROAD JUMPS&quot; will wrap at the hyphen</li>
-            </ul>
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-lg font-medium text-gray-900">Add New Movement</h3>
+            {renderInfoTip(
+              'Add hyphens (-) in movement names to control text wrapping in print.\nExample: BURPEE-BROAD JUMPS will wrap at the hyphen.',
+              'Add New Movement tips'
+            )}
           </div>
-          <div className="flex space-x-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
               value={newEvent}
               onChange={(e) => setNewEvent(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddEvent()}
-              placeholder="Enter movement name..."
-              className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              placeholder="Type movement name and press Enter"
+              className="flex-1 h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
             />
             <button
               onClick={handleAddEvent}
               disabled={!newEvent.trim() || events.includes(newEvent.trim())}
               onMouseEnter={() => setIsAddButtonHover(true)}
               onMouseLeave={() => setIsAddButtonHover(false)}
-              className="px-4 py-2 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="h-10 px-4 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               style={{
                 backgroundColor: isAddButtonHover ? themeColors.accentHover : themeColors.accent,
               }}
@@ -558,28 +611,95 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           </div>
         </div>
 
-        {/* Current Movements with local tips */}
+        {/* Current Movements */}
         <div className="mb-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-3">Current Movements</h3>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-3">
-            <h4 className="text-[11px] font-semibold text-blue-900 mb-1 uppercase tracking-wide">Tips</h4>
-            <ul className="text-[13px] text-blue-700 space-y-1 list-disc pl-5">
-              <li>Drag and drop movements to reorder them</li>
-              <li>Use the arrow buttons for precise reordering</li>
-            </ul>
+          <div className="flex items-center gap-2 mb-0">
+            <h3 className="text-lg font-medium text-gray-900">Current Movements</h3>
+            <span className="text-xs font-medium text-gray-500">{events.length} total</span>
+            {renderInfoTip(
+              'Drag and drop movements to reorder them.\nUse the arrow buttons for precise reordering.',
+              'Current Movements tips'
+            )}
           </div>
+          {movementTimingModeLocal === 'individual' && (
+            <div className="mb-1 flex justify-end gap-2 pr-24 text-xs font-medium text-gray-500">
+              <span className="w-16 text-center">Work</span>
+              <span className="w-16 text-center">Rest</span>
+            </div>
+          )}
           <div className="space-y-2">
-            {events.map((event, index) => (
+            {events.map((movementName, index) => {
+              const movementTiming = movementIntervalsLocal[movementName] || {
+                workMinutes: Math.max(0, Math.round(work)),
+                restMinutes: Math.max(0, Math.round(rest)),
+              };
+              const duplicateName = events.some(
+                (existingName, existingIndex) =>
+                  existingIndex !== index &&
+                  existingName.trim().toLowerCase() === movementName.trim().toLowerCase()
+              );
+
+              return (
               <div
                 key={index}
                 draggable
                 onDragStart={(e) => handleDragStart(e, index)}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, index)}
-                className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-move"
+                className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-move"
               >
-                <span className="flex-1 text-gray-900">{event}</span>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs font-semibold text-gray-500 w-6 text-right">{index + 1}.</span>
+                  <input
+                    type="text"
+                    value={movementName}
+                    onChange={(e) => {
+                      const nextName = e.target.value;
+                      setEvents((prev) => prev.map((name, nameIndex) => (nameIndex === index ? nextName : name)));
+                    }}
+                    className={`w-full min-w-0 h-9 px-3 border rounded-md text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)] ${duplicateName ? 'border-red-300' : 'border-gray-300'}`}
+                    aria-label={`Movement name ${index + 1}`}
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  {movementTimingModeLocal === 'individual' && (
+                    <>
+                      <input
+                        type="number"
+                        min={0}
+                        value={movementTiming.workMinutes}
+                        onChange={(e) => {
+                          const nextWork = Math.max(0, parseInt(e.target.value || '0', 10));
+                          setMovementIntervalsLocal((prev) => ({
+                            ...prev,
+                            [movementName]: {
+                              workMinutes: nextWork,
+                              restMinutes: prev[movementName]?.restMinutes ?? movementTiming.restMinutes,
+                            },
+                          }));
+                        }}
+                        className="w-16 h-9 px-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                        aria-label={`Work minutes for ${movementName}`}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={movementTiming.restMinutes}
+                        onChange={(e) => {
+                          const nextRest = Math.max(0, parseInt(e.target.value || '0', 10));
+                          setMovementIntervalsLocal((prev) => ({
+                            ...prev,
+                            [movementName]: {
+                              workMinutes: prev[movementName]?.workMinutes ?? movementTiming.workMinutes,
+                              restMinutes: nextRest,
+                            },
+                          }));
+                        }}
+                        className="w-16 h-9 px-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                        aria-label={`Rest minutes for ${movementName}`}
+                      />
+                    </>
+                  )}
                   <button
                     onClick={() => handleMoveUp(index)}
                     disabled={index === 0}
@@ -605,7 +725,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -620,70 +741,41 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
             <h4 className="text-[11px] font-semibold text-blue-900 mb-1 uppercase tracking-wide">Important</h4>
             <p className="text-[13px] text-blue-700">Create a new event with the current app template. Required fields below must be filled before the event is created.</p>
           </div>
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Event Name *</label>
               <input
                 type="text"
                 value={newEventName}
-                onChange={(e) => setNewEventName(e.target.value)}
+                onChange={(e) => {
+                  setNewEventName(e.target.value);
+                  setBrandTitle(e.target.value);
+                }}
                 placeholder="Event name"
                 className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
                 required
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
-                <input
-                  type="date"
-                  value={newEventStartDate}
-                  onChange={(e) => setNewEventStartDate(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
-                <input
-                  type="time"
-                  value={newEventStartTime}
-                  onChange={(e) => setNewEventStartTime(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Total Waves *</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={newEventTotalWaves}
-                  onChange={(e) => setNewEventTotalWaves(parseInt(e.target.value || '1', 10))}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-                  required
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Interval Mode *</label>
+              <select
+                value={newEventMovementTimingMode}
+                onChange={(e) => setNewEventMovementTimingMode(e.target.value as 'global' | 'individual')}
+                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)] bg-white"
+                required
+              >
+                <option value="global">Global Interval</option>
+                <option value="individual">Individual Intervals</option>
+              </select>
             </div>
           </div>
         </div>
 
         <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-3">Branding</h3>
           <div className="grid grid-cols-1 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Brand Title *</label>
-              <input
-                type="text"
-                value={brandTitle}
-                onChange={(e) => setBrandTitle(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Theme Gradient Colors</label>
               {renderGradientPresetPicker()}
+              <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">Gradient Colors</label>
               <div className="grid grid-cols-3 gap-2">
                 <input
                   type="color"
@@ -708,49 +800,51 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 />
               </div>
             </div>
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Left Emoji</label>
-              <input
-                type="text"
-                value={brandEmojiLeft}
-                onChange={(e) => setBrandEmojiLeft(e.target.value)}
-                onFocus={() => setOpenEmojiPicker('left')}
-                onClick={() => setOpenEmojiPicker('left')}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-              />
-              {openEmojiPicker === 'left' && (
-                <div className="absolute z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
-                  <EmojiPicker
-                    onEmojiClick={handleEmojiPick}
-                    searchPlaceHolder="Search emoji"
-                    width="100%"
-                    height={320}
-                    previewConfig={{ showPreview: false }}
-                  />
-                </div>
-              )}
-            </div>
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Right Emoji</label>
-              <input
-                type="text"
-                value={brandEmojiRight}
-                onChange={(e) => setBrandEmojiRight(e.target.value)}
-                onFocus={() => setOpenEmojiPicker('right')}
-                onClick={() => setOpenEmojiPicker('right')}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-              />
-              {openEmojiPicker === 'right' && (
-                <div className="absolute right-0 sm:right-auto z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
-                  <EmojiPicker
-                    onEmojiClick={handleEmojiPick}
-                    searchPlaceHolder="Search emoji"
-                    width="100%"
-                    height={320}
-                    previewConfig={{ showPreview: false }}
-                  />
-                </div>
-              )}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="relative min-w-0">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Left Emoji</label>
+                <input
+                  type="text"
+                  value={brandEmojiLeft}
+                  onChange={(e) => setBrandEmojiLeft(e.target.value)}
+                  onFocus={() => setOpenEmojiPicker('left')}
+                  onClick={() => setOpenEmojiPicker('left')}
+                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                />
+                {openEmojiPicker === 'left' && (
+                  <div className="absolute left-0 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
+                    <EmojiPicker
+                      onEmojiClick={handleEmojiPick}
+                      searchPlaceHolder="Search emoji"
+                      width="100%"
+                      height={320}
+                      previewConfig={{ showPreview: false }}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="relative min-w-0">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Right Emoji</label>
+                <input
+                  type="text"
+                  value={brandEmojiRight}
+                  onChange={(e) => setBrandEmojiRight(e.target.value)}
+                  onFocus={() => setOpenEmojiPicker('right')}
+                  onClick={() => setOpenEmojiPicker('right')}
+                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                />
+                {openEmojiPicker === 'right' && (
+                  <div className="absolute left-auto right-0 max-sm:right-2 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
+                    <EmojiPicker
+                      onEmojiClick={handleEmojiPick}
+                      searchPlaceHolder="Search emoji"
+                      width="100%"
+                      height={320}
+                      previewConfig={{ showPreview: false }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -760,10 +854,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     tabContent = (
       <div className="space-y-6" ref={emojiPickerRef}>
         <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-3">Branding</h3>
           <div className="grid grid-cols-1 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Brand Title *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Event Title *</label>
               <input
                 type="text"
                 value={brandTitle}
@@ -773,8 +866,55 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Theme Gradient Colors</label>
-              {renderGradientPresetPicker()}
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-medium text-gray-900">Event Clock Settings</h3>
+                  {renderInfoTip(
+                    'Wave Start Interval: Time between each wave starting (e.g., Wave 1 at 8:00, Wave 2 at 8:10).\nWork + Rest: Duration of each movement station. Movement times on performance/print sheets are calculated using Work + Rest.',
+                    'Event Clock tips'
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void setEventClockEnabled(!eventClockEnabled);
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                    eventClockEnabled
+                      ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
+                      : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                  }`}
+                >
+                  {eventClockEnabled ? 'Disable Clock' : 'Enable Clock'}
+                </button>
+              </div>
+              {movementTimingModeLocal === 'global' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Work (min)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={work}
+                      onChange={(e) => setWork(parseInt(e.target.value || '0', 10))}
+                      className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Rest / Transition (min)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={rest}
+                      onChange={(e) => setRest(parseInt(e.target.value || '0', 10))}
+                      className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Gradient Colors</label>
               <div className="grid grid-cols-3 gap-2">
                 <input
                   type="color"
@@ -799,49 +939,51 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 />
               </div>
             </div>
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Left Emoji</label>
-              <input
-                type="text"
-                value={brandEmojiLeft}
-                onChange={(e) => setBrandEmojiLeft(e.target.value)}
-                onFocus={() => setOpenEmojiPicker('left')}
-                onClick={() => setOpenEmojiPicker('left')}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-              />
-              {openEmojiPicker === 'left' && (
-                <div className="absolute z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
-                  <EmojiPicker
-                    onEmojiClick={handleEmojiPick}
-                    searchPlaceHolder="Search emoji"
-                    width="100%"
-                    height={320}
-                    previewConfig={{ showPreview: false }}
-                  />
-                </div>
-              )}
-            </div>
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Right Emoji</label>
-              <input
-                type="text"
-                value={brandEmojiRight}
-                onChange={(e) => setBrandEmojiRight(e.target.value)}
-                onFocus={() => setOpenEmojiPicker('right')}
-                onClick={() => setOpenEmojiPicker('right')}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-              />
-              {openEmojiPicker === 'right' && (
-                <div className="absolute right-0 sm:right-auto z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
-                  <EmojiPicker
-                    onEmojiClick={handleEmojiPick}
-                    searchPlaceHolder="Search emoji"
-                    width="100%"
-                    height={320}
-                    previewConfig={{ showPreview: false }}
-                  />
-                </div>
-              )}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="relative min-w-0">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Left Emoji</label>
+                <input
+                  type="text"
+                  value={brandEmojiLeft}
+                  onChange={(e) => setBrandEmojiLeft(e.target.value)}
+                  onFocus={() => setOpenEmojiPicker('left')}
+                  onClick={() => setOpenEmojiPicker('left')}
+                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                />
+                {openEmojiPicker === 'left' && (
+                  <div className="absolute left-0 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
+                    <EmojiPicker
+                      onEmojiClick={handleEmojiPick}
+                      searchPlaceHolder="Search emoji"
+                      width="100%"
+                      height={320}
+                      previewConfig={{ showPreview: false }}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="relative min-w-0">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Right Emoji</label>
+                <input
+                  type="text"
+                  value={brandEmojiRight}
+                  onChange={(e) => setBrandEmojiRight(e.target.value)}
+                  onFocus={() => setOpenEmojiPicker('right')}
+                  onClick={() => setOpenEmojiPicker('right')}
+                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                />
+                {openEmojiPicker === 'right' && (
+                  <div className="absolute left-auto right-0 max-sm:right-2 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
+                    <EmojiPicker
+                      onEmojiClick={handleEmojiPick}
+                      searchPlaceHolder="Search emoji"
+                      width="100%"
+                      height={320}
+                      previewConfig={{ showPreview: false }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -860,9 +1002,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
             className="p-4 sm:p-6 pb-0 flex-shrink-0 bg-white"
             style={{ ['--accent-color' as string]: themeColors.accent }}
           >
-            <div className="flex justify-between items-center gap-3 pb-3">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <h2 className="text-2xl font-semibold text-gray-900">Configuration</h2>
+            <div className="flex flex-col gap-3 pb-0 sm:flex-row sm:items-center">
+              <h2 className="text-2xl font-semibold text-gray-900">Configuration</h2>
+              <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
                 <select
                   value={selectedEventId}
                   onChange={async (e) => {
@@ -881,7 +1023,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   }}
                   onFocus={() => setIsEventSelectFocused(true)}
                   onBlur={() => setIsEventSelectFocused(false)}
-                  className="p-2 border rounded-md focus:outline-none bg-white text-sm min-w-[180px] transition-shadow"
+                  className="w-full sm:w-auto p-2 border rounded-md focus:outline-none bg-white text-sm min-w-[180px] transition-shadow"
                   style={{
                     borderColor: themeColors.accent,
                     boxShadow: isEventSelectFocused ? `0 0 0 2px ${themeColors.accent}` : undefined,
@@ -892,13 +1034,13 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   ))}
                   <option value={CREATE_NEW_EVENT_OPTION}>+ Create New Event</option>
                 </select>
+                <button
+                  onClick={onClose}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                >
+                  ×
+                </button>
               </div>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
-              >
-                ×
-              </button>
             </div>
 
             <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 border-b border-gray-200">
@@ -938,7 +1080,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           </div>
 
         {/* Scrollable Content */}
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="px-6 pb-6 pt-0 overflow-y-auto flex-1">
           {tabContent}
 
         </div>

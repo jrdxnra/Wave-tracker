@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import SecurityProvider from '@/components/SecurityProvider';
 import BrandingThemeProvider from '@/components/BrandingThemeProvider';
+import ChunkErrorRecovery from '@/components/ChunkErrorRecovery';
 
 export const metadata: Metadata = {
   title: 'Wave Tracker',
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body className="font-sans bg-gray-50 text-gray-900" suppressHydrationWarning>
         <SecurityProvider>
           <BrandingThemeProvider />
+          <ChunkErrorRecovery />
           {children}
         </SecurityProvider>
       </body>

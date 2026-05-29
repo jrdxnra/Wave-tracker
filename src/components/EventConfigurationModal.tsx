@@ -183,14 +183,9 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
 
           <div className="p-6 overflow-y-auto flex-1">
             <div className="mb-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-3">Event and Branding</h3>
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-2 mb-3">
-                <h4 className="text-[11px] font-semibold text-indigo-900 mb-1 uppercase tracking-wide">Important</h4>
-                <p className="text-[13px] text-indigo-700">Switch events to load a completely separate Wave, Performance, and Leaderboard dataset. Create a blank event to start fresh.</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 mb-4">
-                <div>
+              <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <h3 className="text-lg font-medium text-gray-900">Event and Branding</h3>
+                <div className="w-full sm:w-[22rem] sm:flex-shrink-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Active Event</label>
                   <div className="flex gap-2 items-center">
                     <select
@@ -217,6 +212,14 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
                     {/* Switch button removed: event switching is now instant on select change */}
                   </div>
                 </div>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-2 mb-2">
+                <h4 className="text-[11px] font-semibold text-indigo-900 mb-1 uppercase tracking-wide">Important</h4>
+                <p className="text-[13px] text-indigo-700">Switch events to load a completely separate Wave, Performance, and Leaderboard dataset. Create a blank event to start fresh.</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Create Blank Event</label>
                   <div className="flex flex-col sm:flex-row gap-2">
@@ -240,7 +243,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
 
               <div className="grid grid-cols-1 gap-3" ref={emojiPickerRef}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Brand Title</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Event Title</label>
                   <input
                     type="text"
                     value={brandTitle}
@@ -296,55 +299,57 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
                     </div>
                   </div>
                 </div>
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Left Emoji</label>
-                  <input
-                    type="text"
-                    value={brandEmojiLeft}
-                    onChange={(e) => {
-                      setBrandEmojiLeft(e.target.value);
-                      setIsDirty(true);
-                    }}
-                    onFocus={() => setOpenEmojiPicker('left')}
-                    onClick={() => setOpenEmojiPicker('left')}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                  {openEmojiPicker === 'left' && (
-                    <div className="absolute z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
-                      <EmojiPicker
-                        onEmojiClick={handleEmojiPick}
-                        searchPlaceHolder="Search emoji"
-                        width="100%"
-                        height={320}
-                        previewConfig={{ showPreview: false }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Right Emoji</label>
-                  <input
-                    type="text"
-                    value={brandEmojiRight}
-                    onChange={(e) => {
-                      setBrandEmojiRight(e.target.value);
-                      setIsDirty(true);
-                    }}
-                    onFocus={() => setOpenEmojiPicker('right')}
-                    onClick={() => setOpenEmojiPicker('right')}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                  {openEmojiPicker === 'right' && (
-                    <div className="absolute right-0 sm:right-auto z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
-                      <EmojiPicker
-                        onEmojiClick={handleEmojiPick}
-                        searchPlaceHolder="Search emoji"
-                        width="100%"
-                        height={320}
-                        previewConfig={{ showPreview: false }}
-                      />
-                    </div>
-                  )}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative min-w-0">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Left Emoji</label>
+                    <input
+                      type="text"
+                      value={brandEmojiLeft}
+                      onChange={(e) => {
+                        setBrandEmojiLeft(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      onFocus={() => setOpenEmojiPicker('left')}
+                      onClick={() => setOpenEmojiPicker('left')}
+                      className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                    {openEmojiPicker === 'left' && (
+                      <div className="absolute left-0 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
+                        <EmojiPicker
+                          onEmojiClick={handleEmojiPick}
+                          searchPlaceHolder="Search emoji"
+                          width="100%"
+                          height={320}
+                          previewConfig={{ showPreview: false }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="relative min-w-0">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Right Emoji</label>
+                    <input
+                      type="text"
+                      value={brandEmojiRight}
+                      onChange={(e) => {
+                        setBrandEmojiRight(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      onFocus={() => setOpenEmojiPicker('right')}
+                      onClick={() => setOpenEmojiPicker('right')}
+                      className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                    {openEmojiPicker === 'right' && (
+                      <div className="absolute left-auto right-0 max-sm:right-2 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
+                        <EmojiPicker
+                          onEmojiClick={handleEmojiPick}
+                          searchPlaceHolder="Search emoji"
+                          width="100%"
+                          height={320}
+                          previewConfig={{ showPreview: false }}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
