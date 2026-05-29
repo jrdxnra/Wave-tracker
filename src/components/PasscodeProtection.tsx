@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 
+const isPasscodeProtectionEnabled = process.env.NEXT_PUBLIC_ENABLE_PASSCODE_PROTECTION === 'true';
+
 interface PasscodeProtectionProps {
   children: React.ReactNode;
   requiredPasscode: string;
@@ -14,6 +16,12 @@ export default function PasscodeProtection({ children, requiredPasscode }: Passc
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    if (!isPasscodeProtectionEnabled) {
+      setIsAuthenticated(true);
+      setIsLoading(false);
+      return;
+    }
+
     // Check if already authenticated in this session
     const sessionAuth = sessionStorage.getItem('wavetracker_auth');
     if (sessionAuth === 'authenticated') {

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Stopwatch wave favicon">
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#0f172a"/>
+  <circle cx="32" cy="36" r="16" fill="none" stroke="#f8fafc" stroke-width="5"/>
+  <rect x="28" y="12" width="8" height="6" rx="2" fill="#f8fafc"/>
+  <path d="M22 38C25 33 29 33 32 38C35 43 39 43 42 38" fill="none" stroke="#38bdf8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M44 19L48 15" stroke="#f8fafc" stroke-width="4" stroke-linecap="round"/>
+</svg>

@@ -33,7 +33,6 @@ export default function EventClock({
   const [currentPeriod, setCurrentPeriod] = useState<'work' | 'rest'>('work');
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [showAnimation, setShowAnimation] = useState(false);
-  const [animationType, setAnimationType] = useState<'start' | 'end' | 'transition' | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -65,7 +64,10 @@ export default function EventClock({
     if (typeof window === 'undefined') return;
     
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (AudioContextClass) {
+        audioContextRef.current = new AudioContextClass();
+      }
     }
     
     // Resume context if suspended (iOS requirement)
@@ -136,13 +138,11 @@ export default function EventClock({
   };
 
   // Trigger animation
-  const triggerAnimation = (type: 'start' | 'end' | 'transition') => {
+  const triggerAnimation = () => {
     if (!enableAlerts) return;
-    setAnimationType(type);
     setShowAnimation(true);
     setTimeout(() => {
       setShowAnimation(false);
-      setAnimationType(null);
     }, 1000);
   };
 
@@ -198,7 +198,7 @@ export default function EventClock({
         // Event start!
         if (secondsUntilStart === 0 && !hasPlayedEventStartRef.current) {
           playSound('airhorn');
-          triggerAnimation('start');
+          triggerAnimation();
           hasPlayedEventStartRef.current = true;
         }
       }
@@ -212,7 +212,6 @@ export default function EventClock({
       // Calculate position within interval
       const intervalSeconds = intervalMinutes * 60;
       const workSeconds = workMinutes * 60;
-      const restSeconds = restMinutes * 60;
       
       const positionInInterval = secondsElapsed % intervalSeconds;
       
@@ -228,7 +227,7 @@ export default function EventClock({
           lastBeepSecondRef.current = workRemaining;
         }
         if (alertSettings.workRestTransitions && workRemaining === 0 && lastBeepSecondRef.current !== 0) {
-          triggerAnimation('transition');
+          triggerAnimation();
           lastBeepSecondRef.current = 0;
         }
       } else {
@@ -243,7 +242,7 @@ export default function EventClock({
           lastBeepSecondRef.current = restRemaining;
         }
         if (alertSettings.workRestTransitions && restRemaining === 0 && lastBeepSecondRef.current !== 0) {
-          triggerAnimation('transition');
+          triggerAnimation();
           lastBeepSecondRef.current = 0;
         }
       }
@@ -254,10 +253,11 @@ export default function EventClock({
       // Event end
       if (alertSettings.eventStartEnd && !hasPlayedEventEndRef.current) {
         playSound('airhorn');
-        triggerAnimation('end');
+        triggerAnimation();
         hasPlayedEventEndRef.current = true;
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTime, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, alertSettings]);
 
   // Format time
@@ -300,19 +300,29 @@ export default function EventClock({
   };
 
   // Get background gradient based on state
-  const getBackgroundClass = () => {
-    if (eventStatus === 'before') return 'from-blue-700 to-blue-600';
-    if (eventStatus === 'after') return 'from-green-700 to-green-600';
+  const getBackgroundStyle = () => {
+    if (eventStatus === 'before') {
+      return { background: 'linear-gradient(to right, #1d4ed8, #2563eb)' };
+    }
+    if (eventStatus === 'after') {
+      return { background: 'linear-gradient(to right, #047857, #059669)' };
+    }
     if (currentPeriod === 'work') {
-      if (timeRemaining <= 5) return 'from-red-600 to-red-500';
-      if (timeRemaining <= 10) return 'from-yellow-600 to-yellow-500';
-      return 'from-orange-700 to-orange-600';
+      if (timeRemaining <= 5) {
+        return { background: 'linear-gradient(to right, #dc2626, #ef4444)' };
+      }
+      if (timeRemaining <= 10) {
+        return { background: 'linear-gradient(to right, #ca8a04, #eab308)' };
+      }
+      return { background: 'linear-gradient(to right, var(--brand-start), var(--brand-mid))' };
     }
     if (currentPeriod === 'rest') {
-      if (timeRemaining <= 5) return 'from-yellow-600 to-yellow-500';
-      return 'from-blue-700 to-blue-600';
+      if (timeRemaining <= 5) {
+        return { background: 'linear-gradient(to right, #ca8a04, #eab308)' };
+      }
+      return { background: 'linear-gradient(to right, #1d4ed8, #2563eb)' };
     }
-    return 'from-slate-700 to-slate-600';
+    return { background: 'linear-gradient(to right, #334155, #475569)' };
   };
 
   // Get scale/pulse effects
@@ -355,11 +365,11 @@ export default function EventClock({
       <div className={`relative transition-all duration-300 ${getAnimationClass()}`}>
         <div 
           className={`
-            bg-gradient-to-r ${getBackgroundClass()} 
             rounded-2xl shadow-2xl p-6 
             transition-all duration-300
             ${getPulseClass()}
           `}
+          style={getBackgroundStyle()}
         >
           {/* Enable Audio Button for iOS */}
           {!audioEnabled && enableAlerts && (

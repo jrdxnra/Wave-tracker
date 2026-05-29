@@ -11,11 +11,13 @@ import PasscodeProtection from '@/components/PasscodeProtection';
 
 export default function PerformancePage() {
   const [mounted, setMounted] = useState(false);
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
   const [selectedWaveId, setSelectedWaveId] = useState<string | null>(null);
   const router = useRouter();
   
-  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, setCurrentWave, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, syncWithFirebase, syncWithFirebaseNoCooldown, setUserActivity, loadGlobalConfig } = useWaveStore();
+  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, eventBranding, activeEventId, eventClockEnabled, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, loadAll, setUserActivity } = useWaveStore();
   const waveIds = Object.keys(waves);
   
   // Use local selectedWaveId for tab persistence, fallback to currentWaveId
@@ -23,15 +25,19 @@ export default function PerformancePage() {
   const currentWave = activeWaveId ? waves[activeWaveId] : null;
 
   useEffect(() => {
+    let isCancelled = false;
     setMounted(true);
-    // Load fresh global config from Firebase on page load
-    loadGlobalConfig();
-    // Sync with Firebase on page load to get fresh wave data
-    syncWithFirebase();
+    // Always load complete event data before first render of performance table.
+    (async () => {
+      await loadAll();
+      if (!isCancelled) {
+        setIsInitialLoadComplete(true);
+      }
+    })();
     
     // Handle pull-to-refresh on mobile
     const handleRefresh = async () => {
-      await syncWithFirebaseNoCooldown();
+      await loadAll();
     };
     
     // Listen for visibility change (happens on pull-to-refresh)
@@ -50,10 +56,11 @@ export default function PerformancePage() {
     window.addEventListener('pageshow', handlePageShow);
     
     return () => {
+      isCancelled = true;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pageshow', handlePageShow);
     };
-  }, [loadGlobalConfig, syncWithFirebase, syncWithFirebaseNoCooldown]);
+  }, [loadAll]);
 
   // No background sync - only sync on page load and after saves
 
@@ -61,21 +68,21 @@ export default function PerformancePage() {
   useEffect(() => {
     if (waveIds.length > 0 && !selectedWaveId) {
       // Try to restore from localStorage first
-      const savedWaveId = localStorage.getItem('performance-selected-wave');
+      const savedWaveId = localStorage.getItem(`performance-selected-wave:${activeEventId}`);
       if (savedWaveId && waveIds.includes(savedWaveId)) {
         setSelectedWaveId(savedWaveId);
       } else {
         setSelectedWaveId(currentWaveId || waveIds[0]);
       }
     }
-  }, [waveIds, currentWaveId, selectedWaveId]);
+  }, [waveIds, currentWaveId, selectedWaveId, activeEventId]);
 
   // Save selected wave to localStorage when it changes
   useEffect(() => {
     if (selectedWaveId) {
-      localStorage.setItem('performance-selected-wave', selectedWaveId);
+      localStorage.setItem(`performance-selected-wave:${activeEventId}`, selectedWaveId);
     }
-  }, [selectedWaveId]);
+  }, [selectedWaveId, activeEventId]);
 
   // Mark wave as active when selected, inactive when deselected
   useEffect(() => {
@@ -91,7 +98,7 @@ export default function PerformancePage() {
     };
   }, [activeWaveId, markWaveAsActive, markWaveAsInactive]);
 
-  if (!mounted) {
+  if (!mounted || !isInitialLoadComplete) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -108,10 +115,10 @@ export default function PerformancePage() {
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
           <header className="text-center mb-8 relative">
             <div className="header-gradient p-8">
-              <div className="header-emoji header-emoji-left">📊</div>
-              <div className="header-emoji header-emoji-right">💪</div>
+              <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
+              <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
               <div className="pt-8 sm:pt-4">
-                <h1 className="text-2xl sm:text-4xl header-title mb-2">📊 Performance Tracker 📊</h1>
+                <h1 className="text-2xl sm:text-4xl header-title mb-2">{eventBranding.emojiLeft} {eventBranding.title} Performance {eventBranding.emojiRight}</h1>
                 <p className="text-white/90">Record workout performance data for all waves</p>
               </div>
             </div>
@@ -160,16 +167,18 @@ export default function PerformancePage() {
               </div>
 
               {/* Event Clock */}
-              <EventClock 
-                eventStartDate={eventStartDate}
-                eventStartTime={eventStartTime}
-                intervalMinutes={intervalMinutes}
-                workMinutes={workMinutes}
-                restMinutes={restMinutes}
-                totalWaves={totalWaves}
-                alertSettings={alertSettings}
-                enableAlerts={true}
-              />
+              {eventClockEnabled && (
+                <EventClock 
+                  eventStartDate={eventStartDate}
+                  eventStartTime={eventStartTime}
+                  intervalMinutes={intervalMinutes}
+                  workMinutes={workMinutes}
+                  restMinutes={restMinutes}
+                  totalWaves={totalWaves}
+                  alertSettings={alertSettings}
+                  enableAlerts={true}
+                />
+              )}
 
               {/* Performance Table */}
               {currentWave ? (
@@ -187,7 +196,10 @@ export default function PerformancePage() {
 
       {/* Floating Hamburger Menu */}
       <FloatingHamburgerMenu 
-        onConfigClick={() => setIsConfigOpen(true)} 
+        onSettingsClick={() => {
+          setConfigInitialTab('movement');
+          setIsConfigOpen(true);
+        }}
         currentPage="performance"
       />
       
@@ -195,6 +207,7 @@ export default function PerformancePage() {
       <ConfigurationModal 
         isOpen={isConfigOpen} 
         onClose={() => setIsConfigOpen(false)}
+        initialTab={configInitialTab}
         onClearCache={async () => {
           await clearCacheAndReload();
           alert('✅ Cache cleared! Fresh data loaded from Firebase.');

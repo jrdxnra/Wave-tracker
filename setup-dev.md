@@ -1,42 +1,35 @@
-# Development Environment Setup
+# Local Development Setup
 
-## To prevent local development from affecting the live site:
+## Current Firebase Setup
 
-### 1. Create Development Firebase Project
-- Go to: https://console.firebase.google.com/project/wave-tracker-dev/overview
-- Enable Firestore Database
-- Set up Firestore rules (copy from production)
+- Firebase project: `wave-tracker-exos`
+- Firebase web app: `Wave-tracker`
+- Hosting site: `wavetracker`
+- Public URL: https://wavetracker.web.app
 
-### 2. Get Development Firebase Config
-- In the Firebase console, go to Project Settings → General
-- Scroll down to "Your apps" section
-- Click "Add app" → Web app
-- Copy the config values
+## 1. Create .env.local
 
-### 3. Create .env.local file
-Create a file called `.env.local` in the project root with:
+Copy `env.example` to `.env.local` in the project root.
 
-```
-# Development Firebase Configuration
-NEXT_PUBLIC_FIREBASE_API_KEY=your_dev_api_key_here
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=wave-tracker-dev.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=wave-tracker-dev
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=wave-tracker-dev.firebasestorage.app
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_dev_messaging_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_dev_app_id
+## 2. Start the app
+
+```bash
+npm run dev
 ```
 
-### 4. Test Development Environment
-- Run `npm run dev`
-- Check browser console for Firebase connection
-- Verify it connects to wave-tracker-dev project
+The app will be available at `http://localhost:3000`.
 
-### 5. Deploy to Production
-- Use `firebase deploy` (uses production project)
-- Local development uses development project
+## 3. Firebase config behavior
 
-## Current Status:
-- ✅ Development Firebase project created: wave-tracker-dev
-- ✅ Environment variables configured in code
-- ⏳ Need to enable Firestore in development project
-- ⏳ Need to create .env.local file with dev config
+- The app reads Firebase config from `.env.local`.
+- The repo no longer hardcodes Firebase config in source.
+- Changing the Hosting site URL did not require a new Firebase web app config.
+- The official Firebase SDK config still uses `wave-tracker-exos.firebaseapp.com` as `authDomain`, so built-in Firebase Auth email links may continue to show that domain even though the public site URL is `wavetracker.web.app`.
+
+## 4. Deploy
+
+```bash
+npm run deploy
+```
+
+That deploys Hosting to project `wave-tracker-exos` and site `wavetracker`.

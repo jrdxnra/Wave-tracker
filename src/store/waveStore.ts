@@ -4,10 +4,368 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Participant, Wave, WAVE_EVENTS } from '@/types';
 import { getFirebase } from '@/lib/firebase';
-import { collection, doc, setDoc, writeBatch, serverTimestamp, getDoc, getDocs, deleteDoc } from 'firebase/firestore';
+import { collection, collectionGroup, doc, setDoc, writeBatch, serverTimestamp, getDoc, getDocs, deleteDoc, DocumentReference, Firestore } from 'firebase/firestore';
 import { secureLogger } from '@/lib/secureLogger';
 
+type BrandTheme = 'orange' | 'blue' | 'emerald' | 'sunset';
+
+interface EventBranding {
+  title: string;
+  emojiLeft: string;
+  emojiRight: string;
+  theme: BrandTheme;
+  customColor?: string;
+  customGradient?: {
+    start: string;
+    mid: string;
+    end: string;
+  };
+}
+
+interface EventSummary {
+  id: string;
+  name: string;
+}
+
+const DEFAULT_EVENT_ID = 'g-rox';
+const DEFAULT_EVENT_NAME = 'G-ROX';
+
+const DEFAULT_BRANDING: EventBranding = {
+  title: DEFAULT_EVENT_NAME,
+  emojiLeft: '',
+  emojiRight: '',
+  theme: 'orange',
+};
+
+const THEME_PRESETS: Record<BrandTheme, { start: string; mid: string; end: string; accent: string; accentHover: string }> = {
+  orange: {
+    start: '#ea580c',
+    mid: '#f97316',
+    end: '#fbbf24',
+    accent: '#ea580c',
+    accentHover: '#c2410c',
+  },
+  blue: {
+    start: '#1d4ed8',
+    mid: '#2563eb',
+    end: '#38bdf8',
+    accent: '#2563eb',
+    accentHover: '#1d4ed8',
+  },
+  emerald: {
+    start: '#047857',
+    mid: '#059669',
+    end: '#34d399',
+    accent: '#059669',
+    accentHover: '#047857',
+  },
+  sunset: {
+    start: '#be185d',
+    mid: '#db2777',
+    end: '#fb7185',
+    accent: '#db2777',
+    accentHover: '#be185d',
+  },
+};
+
+function normalizeHexColor(color: string | undefined, fallback: string): string {
+  if (!color) return fallback;
+  const normalized = color.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(normalized)) return normalized;
+  return fallback;
+}
+
+function adjustHexColor(hex: string, delta: number): string {
+  const normalized = normalizeHexColor(hex, '#f97316');
+  const value = normalized.slice(1);
+  const channel = (start: number) => {
+    const component = parseInt(value.slice(start, start + 2), 16);
+    return Math.max(0, Math.min(255, component + delta));
+  };
+
+  const r = channel(0).toString(16).padStart(2, '0');
+  const g = channel(2).toString(16).padStart(2, '0');
+  const b = channel(4).toString(16).padStart(2, '0');
+  return `#${r}${g}${b}`;
+}
+
+function getThemeColors(branding: EventBranding) {
+  const fallback = THEME_PRESETS[branding.theme] || THEME_PRESETS.orange;
+
+  if (branding.customGradient) {
+    const start = normalizeHexColor(branding.customGradient.start, fallback.start);
+    const mid = normalizeHexColor(branding.customGradient.mid, fallback.mid);
+    const end = normalizeHexColor(branding.customGradient.end, fallback.end);
+    return {
+      start,
+      mid,
+      end,
+      accent: mid,
+      accentHover: adjustHexColor(mid, -22),
+    };
+  }
+
+  if (!branding.customColor) return fallback;
+
+  const accent = normalizeHexColor(branding.customColor, fallback.accent);
+  return {
+    start: adjustHexColor(accent, -28),
+    mid: accent,
+    end: adjustHexColor(accent, 42),
+    accent,
+    accentHover: adjustHexColor(accent, -22),
+  };
+}
+
+function sanitizeBrandingForFirestore(branding: EventBranding): EventBranding {
+  const sanitized: EventBranding = {
+    title: branding.title,
+    emojiLeft: branding.emojiLeft,
+    emojiRight: branding.emojiRight,
+    theme: branding.theme,
+  };
+
+  if (branding.customColor) {
+    sanitized.customColor = branding.customColor;
+  }
+
+  if (branding.customGradient) {
+    sanitized.customGradient = branding.customGradient;
+  }
+
+  return sanitized;
+}
+
+function buildDefaultEventConfig(title: string, date = new Date()): FirebaseConfigData {
+  return {
+    customEvents: WAVE_EVENTS,
+    timing: {
+      intervalMinutes: 5,
+      workMinutes: 3,
+      restMinutes: 2,
+    },
+    eventNotes: '',
+    maxParticipants: 10,
+    workoutTimer: {
+      workSeconds: 60,
+      restSeconds: 30,
+    },
+    event: {
+      startDate: date.toISOString().split('T')[0],
+      startTime: '08:00',
+      totalWaves: 30,
+    },
+    accessPasscode: '54321Blastoff!',
+    eventClockEnabled: false,
+    branding: {
+      title,
+      emojiLeft: '',
+      emojiRight: '',
+      theme: 'blue',
+      customColor: '#2563eb',
+      customGradient: {
+        start: '#1d4ed8',
+        mid: '#2563eb',
+        end: '#38bdf8',
+      },
+    },
+  };
+}
+
+function slugifyEventId(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'event';
+}
+
+function formatEventNameFromId(eventId: string): string {
+  if (eventId === DEFAULT_EVENT_ID) return DEFAULT_EVENT_NAME;
+  return eventId
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function getEventConfigRef(db: Firestore, eventId: string) {
+  return doc(db, 'events', eventId, 'config', 'global');
+}
+
+function getEventWavesCollection(db: Firestore, eventId: string) {
+  return collection(db, 'events', eventId, 'waves');
+}
+
+function getEventActiveWavesCollection(db: Firestore, eventId: string) {
+  return collection(db, 'events', eventId, 'activeWaves');
+}
+
+function getEventsIndexRef(db: Firestore) {
+  return doc(db, 'config', 'eventsIndex');
+}
+
+function getGlobalSettingsRef(db: Firestore) {
+  return doc(db, 'config', 'global');
+}
+
+async function deleteDocsInBatches(db: Firestore, refs: DocumentReference[]): Promise<void> {
+  if (refs.length === 0) return;
+
+  let batch = writeBatch(db);
+  let count = 0;
+
+  for (const ref of refs) {
+    batch.delete(ref);
+    count += 1;
+
+    if (count === 450) {
+      await batch.commit();
+      batch = writeBatch(db);
+      count = 0;
+    }
+  }
+
+  if (count > 0) {
+    await batch.commit();
+  }
+}
+
+async function deleteEventFromFirestore(db: Firestore, eventId: string): Promise<void> {
+  const wavesSnap = await getDocs(getEventWavesCollection(db, eventId));
+  for (const waveDoc of wavesSnap.docs) {
+    const participantsSnap = await getDocs(collection(waveDoc.ref, 'participants'));
+    await deleteDocsInBatches(db, participantsSnap.docs.map((docSnap) => docSnap.ref));
+  }
+
+  await deleteDocsInBatches(db, wavesSnap.docs.map((docSnap) => docSnap.ref));
+
+  const activeWavesSnap = await getDocs(getEventActiveWavesCollection(db, eventId));
+  await deleteDocsInBatches(db, activeWavesSnap.docs.map((docSnap) => docSnap.ref));
+
+  await deleteDoc(getEventConfigRef(db, eventId));
+  await deleteDoc(doc(db, 'events', eventId));
+}
+
+async function ensureDefaultEventConfigExists(db: Firestore): Promise<void> {
+  const defaultConfigRef = getEventConfigRef(db, DEFAULT_EVENT_ID);
+  const defaultConfigSnap = await getDoc(defaultConfigRef);
+  if (defaultConfigSnap.exists()) return;
+
+  const legacyConfigRef = doc(db, 'config', 'global');
+  const legacyConfigSnap = await getDoc(legacyConfigRef);
+
+  if (legacyConfigSnap.exists()) {
+    await setDoc(defaultConfigRef, {
+      ...legacyConfigSnap.data(),
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    return;
+  }
+
+  await setDoc(defaultConfigRef, {
+    customEvents: WAVE_EVENTS,
+    timing: {
+      intervalMinutes: 5,
+      workMinutes: 3,
+      restMinutes: 2,
+    },
+    eventNotes: '',
+    maxParticipants: 10,
+    workoutTimer: {
+      workSeconds: 60,
+      restSeconds: 30,
+    },
+    event: {
+      startDate: new Date().toISOString().split('T')[0],
+      startTime: '08:00',
+      totalWaves: 30,
+    },
+    accessPasscode: '54321Blastoff!',
+    branding: {
+      title: DEFAULT_EVENT_NAME,
+      emojiLeft: '',
+      emojiRight: '',
+      theme: 'orange',
+      customGradient: {
+        start: '#ea580c',
+        mid: '#f97316',
+        end: '#fbbf24',
+      },
+    },
+    updatedAt: new Date().toISOString(),
+  }, { merge: true });
+}
+
+async function migrateLegacyGroxWavesIfMissing(db: Firestore): Promise<void> {
+  const eventWavesCol = getEventWavesCollection(db, DEFAULT_EVENT_ID);
+  const eventWavesSnap = await getDocs(eventWavesCol);
+  const existingEventWaveIds = new Set(eventWavesSnap.docs.map((docSnap) => docSnap.id));
+
+  const legacyWavesCol = collection(db, 'waves');
+  const legacyWavesSnap = await getDocs(legacyWavesCol);
+  if (legacyWavesSnap.empty) return;
+
+  for (const legacyWaveDoc of legacyWavesSnap.docs) {
+    if (existingEventWaveIds.has(legacyWaveDoc.id)) {
+      continue;
+    }
+
+    const targetWaveRef = doc(eventWavesCol, legacyWaveDoc.id);
+    await setDoc(targetWaveRef, legacyWaveDoc.data(), { merge: true });
+
+    const legacyParticipantsSnap = await getDocs(collection(legacyWaveDoc.ref, 'participants'));
+    for (const participantDoc of legacyParticipantsSnap.docs) {
+      await setDoc(doc(collection(targetWaveRef, 'participants'), participantDoc.id), participantDoc.data(), { merge: true });
+    }
+  }
+}
+
+async function ensureDefaultEventAvailable(db: Firestore): Promise<void> {
+  await ensureDefaultEventConfigExists(db);
+  await migrateLegacyGroxWavesIfMissing(db);
+}
+
+// Firebase data types
+interface FirebaseConfigData {
+  customEvents?: string[];
+  timing?: {
+    intervalMinutes?: number;
+    workMinutes?: number;
+    restMinutes?: number;
+  };
+  eventNotes?: string;
+  maxParticipants?: number;
+  workoutTimer?: {
+    workSeconds?: number;
+    restSeconds?: number;
+  };
+  event?: {
+    startDate?: string;
+    startTime?: string;
+    totalWaves?: number;
+  };
+  alertSettings?: WaveStore['alertSettings'];
+  accessPasscode?: string;
+  eventClockEnabled?: boolean;
+  branding?: EventBranding;
+}
+
+interface FirebaseEventsIndexData {
+  activeEventId?: string;
+  events?: EventSummary[];
+}
+
+interface FirebaseWaveData {
+  name?: string;
+  startTime?: string;
+}
+
 interface WaveStore {
+  activeEventId: string;
+  eventsCatalog: EventSummary[];
+  eventBranding: EventBranding;
+  themeColors: { start: string; mid: string; end: string; accent: string; accentHover: string };
   waves: Record<string, Wave>;
   currentWaveId: string | null;
   eventNotes: string;
@@ -22,6 +380,7 @@ interface WaveStore {
   eventStartTime: string; // Format: "HH:mm" (24-hour)
   totalWaves: number;
   accessPasscode: string; // Passcode for protecting pages
+  eventClockEnabled: boolean;
   // Alert settings are hardcoded - always enabled with beep sound and flash visual
   alertSettings: {
     workRestTransitions: boolean;
@@ -55,6 +414,12 @@ interface WaveStore {
   setWorkoutTimerConfig: (workSeconds: number, restSeconds: number) => Promise<void>;
   setEventConfig: (startDate: string, startTime: string, totalWaves: number) => Promise<void>;
   setAccessPasscode: (passcode: string) => Promise<void>;
+  setEventClockEnabled: (enabled: boolean) => Promise<void>;
+  createEvent: (name: string) => Promise<void>;
+  deleteEvent: (eventId: string) => Promise<void>;
+  setActiveEvent: (eventId: string) => Promise<void>;
+  updateEventBranding: (updates: Partial<EventBranding>) => Promise<void>;
+  loadEventsCatalog: () => Promise<void>;
   saveAll: () => Promise<void>;
   loadAll: () => Promise<void>;
   loadGlobalConfig: () => Promise<void>;
@@ -76,9 +441,20 @@ const createInitialWaveData = (events: string[]): Record<string, string> =>
     return acc;
   }, {} as Record<string, string>);
 
+/** Load all participants from a wave's Firestore subcollection. */
+async function loadWaveParticipants(waveRef: DocumentReference): Promise<Participant[]> {
+  const participantsCol = collection(waveRef, 'participants');
+  const partsSnap = await getDocs(participantsCol);
+  return partsSnap.docs.map((d) => d.data() as Participant);
+}
+
 export const useWaveStore = create<WaveStore>()(
   persist(
     (set, get) => ({
+      activeEventId: DEFAULT_EVENT_ID,
+      eventsCatalog: [{ id: DEFAULT_EVENT_ID, name: 'G-ROX' }],
+      eventBranding: DEFAULT_BRANDING,
+      themeColors: getThemeColors(DEFAULT_BRANDING),
       waves: {},
       currentWaveId: null,
       eventNotes: '',
@@ -93,6 +469,7 @@ export const useWaveStore = create<WaveStore>()(
       eventStartTime: '08:00',
       totalWaves: 30,
       accessPasscode: '54321Blastoff!', // Default passcode
+      eventClockEnabled: false,
       // Alert settings are hardcoded - always enabled with beep sound and flash visual
       alertSettings: {
         workRestTransitions: true,
@@ -138,7 +515,7 @@ export const useWaveStore = create<WaveStore>()(
         // Delete from Firebase
         try {
           const { db } = getFirebase();
-          const waveRef = doc(collection(db, 'waves'), waveId);
+          const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
           
           // Delete all participants in this wave first
           const participantsSnapshot = await getDocs(collection(waveRef, 'participants'));
@@ -195,7 +572,7 @@ export const useWaveStore = create<WaveStore>()(
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const waveRef = doc(collection(db, 'waves'), waveId);
+          const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
           
           // Save wave document
           await setDoc(waveRef, {
@@ -241,7 +618,7 @@ export const useWaveStore = create<WaveStore>()(
         // Delete from Firebase immediately
         try {
           const { db } = getFirebase();
-          const waveRef = doc(collection(db, 'waves'), waveId);
+          const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
           const participantRef = doc(collection(waveRef, 'participants'), participantId);
           
           await deleteDoc(participantRef);
@@ -318,7 +695,7 @@ export const useWaveStore = create<WaveStore>()(
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const waveRef = doc(collection(db, 'waves'), waveId);
+          const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
           const participantRef = doc(collection(waveRef, 'participants'), participantId);
           
           await setDoc(participantRef, {
@@ -342,7 +719,7 @@ export const useWaveStore = create<WaveStore>()(
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const configRef = doc(db, 'config', 'global');
+          const configRef = getEventConfigRef(db, get().activeEventId);
           await setDoc(configRef, {
             timing: {
               intervalMinutes,
@@ -362,7 +739,7 @@ export const useWaveStore = create<WaveStore>()(
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const configRef = doc(db, 'config', 'global');
+          const configRef = getEventConfigRef(db, get().activeEventId);
           await setDoc(configRef, {
             maxParticipants,
             updatedAt: new Date().toISOString()
@@ -378,7 +755,7 @@ export const useWaveStore = create<WaveStore>()(
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const configRef = doc(db, 'config', 'global');
+          const configRef = getEventConfigRef(db, get().activeEventId);
           await setDoc(configRef, {
             workoutTimer: {
               workSeconds,
@@ -397,7 +774,7 @@ export const useWaveStore = create<WaveStore>()(
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const configRef = doc(db, 'config', 'global');
+          const configRef = getEventConfigRef(db, get().activeEventId);
           await setDoc(configRef, {
             event: {
               startDate,
@@ -417,13 +794,293 @@ export const useWaveStore = create<WaveStore>()(
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const configRef = doc(db, 'config', 'global');
+          const configRef = getGlobalSettingsRef(db);
           await setDoc(configRef, {
             accessPasscode: passcode,
             updatedAt: new Date().toISOString()
           }, { merge: true });
         } catch (error) {
           console.error('❌ Failed to save access passcode to Firebase:', error);
+        }
+      },
+
+      setEventClockEnabled: async (enabled) => {
+        set({ eventClockEnabled: enabled });
+
+        try {
+          const { db } = getFirebase();
+          const configRef = getEventConfigRef(db, get().activeEventId);
+          await setDoc(configRef, {
+            eventClockEnabled: enabled,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        } catch (error) {
+          console.error('❌ Failed to save event clock setting to Firebase:', error);
+        }
+      },
+
+      loadEventsCatalog: async () => {
+        const { db } = getFirebase();
+        try {
+          const indexRef = getEventsIndexRef(db);
+          const indexSnap = await getDoc(indexRef);
+
+          if (!indexSnap.exists()) {
+            const initialEvents: EventSummary[] = [{ id: DEFAULT_EVENT_ID, name: DEFAULT_EVENT_NAME }];
+            await setDoc(indexRef, {
+              activeEventId: DEFAULT_EVENT_ID,
+              events: initialEvents,
+              updatedAt: new Date().toISOString(),
+            }, { merge: true });
+            await ensureDefaultEventAvailable(db);
+            set({ activeEventId: DEFAULT_EVENT_ID, eventsCatalog: initialEvents });
+            return;
+          }
+
+          const data = indexSnap.data() as FirebaseEventsIndexData;
+          const events = Array.isArray(data.events) && data.events.length > 0 ? [...data.events] : [];
+          const knownEventIds = new Set(events.map((event) => event.id));
+
+          // Self-heal: include any event docs that exist in Firestore but are missing from eventsIndex.
+          let discoveredMissingEvents = false;
+          try {
+            const allEventsSnap = await getDocs(collection(db, 'events'));
+            for (const eventDoc of allEventsSnap.docs) {
+              if (knownEventIds.has(eventDoc.id)) continue;
+
+              let displayName = formatEventNameFromId(eventDoc.id);
+              try {
+                const configSnap = await getDoc(getEventConfigRef(db, eventDoc.id));
+                if (configSnap.exists()) {
+                  const configData = configSnap.data() as FirebaseConfigData;
+                  const brandingTitle = configData.branding?.title;
+                  if (typeof brandingTitle === 'string' && brandingTitle.trim()) {
+                    displayName = brandingTitle.trim();
+                  }
+                }
+              } catch {
+                // If config is unavailable, keep the ID-derived display name.
+              }
+
+              events.push({ id: eventDoc.id, name: displayName });
+              knownEventIds.add(eventDoc.id);
+              discoveredMissingEvents = true;
+            }
+          } catch {
+            // If discovery fails (rules/network), continue with index data.
+          }
+
+          // Also discover events from config docs in case parent /events/{id} docs were never created.
+          try {
+            const configGroupSnap = await getDocs(collectionGroup(db, 'config'));
+            for (const configDoc of configGroupSnap.docs) {
+              if (configDoc.id !== 'global') continue;
+
+              const pathSegments = configDoc.ref.path.split('/');
+              if (pathSegments.length < 4 || pathSegments[0] !== 'events') continue;
+
+              const eventId = pathSegments[1];
+              if (!eventId || knownEventIds.has(eventId)) continue;
+
+              const configData = configDoc.data() as FirebaseConfigData;
+              const brandingTitle = configData.branding?.title;
+              const displayName = typeof brandingTitle === 'string' && brandingTitle.trim()
+                ? brandingTitle.trim()
+                : formatEventNameFromId(eventId);
+
+              events.push({ id: eventId, name: displayName });
+              knownEventIds.add(eventId);
+              discoveredMissingEvents = true;
+            }
+          } catch {
+            // If collection-group discovery fails, continue with what we already have.
+          }
+
+          const hasDefaultEvent = events.some((event) => event.id === DEFAULT_EVENT_ID);
+          if (!hasDefaultEvent) {
+            events.unshift({ id: DEFAULT_EVENT_ID, name: DEFAULT_EVENT_NAME });
+          }
+
+          const activeEventId = events.some((event) => event.id === data.activeEventId)
+            ? (data.activeEventId as string)
+            : DEFAULT_EVENT_ID;
+
+          if (!hasDefaultEvent || activeEventId !== data.activeEventId || discoveredMissingEvents) {
+            await setDoc(indexRef, {
+              activeEventId,
+              events,
+              updatedAt: new Date().toISOString(),
+            }, { merge: true });
+          }
+
+          await ensureDefaultEventAvailable(db);
+
+          set({ eventsCatalog: events, activeEventId });
+        } catch (error) {
+          secureLogger.error('❌ Failed to load events catalog:', error);
+          set({
+            activeEventId: DEFAULT_EVENT_ID,
+            eventsCatalog: [{ id: DEFAULT_EVENT_ID, name: DEFAULT_EVENT_NAME }],
+          });
+        }
+      },
+
+      createEvent: async (name) => {
+        const trimmedName = name.trim();
+        if (!trimmedName) return;
+
+        const { db } = getFirebase();
+        const currentEvents = get().eventsCatalog;
+        const baseId = slugifyEventId(trimmedName);
+        let candidate = baseId;
+        let counter = 1;
+        const existing = new Set(currentEvents.map((e) => e.id));
+        while (existing.has(candidate)) {
+          counter += 1;
+          candidate = `${baseId}-${counter}`;
+        }
+
+        const newEvent: EventSummary = { id: candidate, name: trimmedName };
+        const events = [...currentEvents, newEvent];
+
+        await setDoc(getEventsIndexRef(db), {
+          events,
+          activeEventId: candidate,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        await setDoc(doc(db, 'events', candidate), {
+          id: candidate,
+          name: trimmedName,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        await setDoc(getEventConfigRef(db, candidate), {
+          ...buildDefaultEventConfig(trimmedName),
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        set({
+          eventsCatalog: events,
+          activeEventId: candidate,
+          waves: {},
+          currentWaveId: null,
+          isDataLoaded: false,
+          eventClockEnabled: false,
+        });
+
+        await get().loadAll();
+      },
+
+      deleteEvent: async (eventId) => {
+        const trimmedEventId = eventId.trim();
+        if (!trimmedEventId || trimmedEventId === DEFAULT_EVENT_ID) return;
+
+        const currentEvents = get().eventsCatalog;
+        const targetExists = currentEvents.some((event) => event.id === trimmedEventId);
+        if (!targetExists) return;
+
+        const remainingEvents = currentEvents.filter((event) => event.id !== trimmedEventId);
+        const fallbackActiveEvent = remainingEvents[0]?.id || DEFAULT_EVENT_ID;
+        const nextActiveEventId = get().activeEventId === trimmedEventId ? fallbackActiveEvent : get().activeEventId;
+
+        const { db } = getFirebase();
+        await deleteEventFromFirestore(db, trimmedEventId);
+
+        await setDoc(getEventsIndexRef(db), {
+          events: remainingEvents,
+          activeEventId: nextActiveEventId,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        if (get().activeEventId === trimmedEventId) {
+          set({
+            eventsCatalog: remainingEvents,
+            activeEventId: nextActiveEventId,
+            waves: {},
+            currentWaveId: null,
+            isDataLoaded: false,
+            lastFirebaseSync: null,
+            activeWaves: new Set<string>(),
+            eventClockEnabled: false,
+            eventBranding: {
+              title: '',
+              emojiLeft: '',
+              emojiRight: '',
+              theme: 'orange',
+              customColor: undefined,
+              customGradient: undefined,
+            },
+            eventNotes: '',
+          });
+          await get().loadAll();
+          return;
+        }
+
+        set({ eventsCatalog: remainingEvents });
+      },
+
+      setActiveEvent: async (eventId) => {
+        const exists = get().eventsCatalog.some((e) => e.id === eventId);
+        if (!exists) return;
+
+        const { db } = getFirebase();
+        await setDoc(getEventsIndexRef(db), {
+          activeEventId: eventId,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        // Aggressively reset all event-specific state to true empty/defaults
+        set({
+          activeEventId: eventId,
+          waves: {},
+          currentWaveId: null,
+          isDataLoaded: false,
+          lastFirebaseSync: null,
+          activeWaves: new Set<string>(),
+          eventClockEnabled: false,
+          eventBranding: {
+            title: '',
+            emojiLeft: '',
+            emojiRight: '',
+            theme: 'orange',
+            customColor: undefined,
+            customGradient: undefined,
+          },
+          eventNotes: '',
+        });
+
+        await get().loadAll();
+      },
+
+      updateEventBranding: async (updates) => {
+        const current = get().eventBranding;
+        const nextBranding: EventBranding = {
+          ...current,
+          ...updates,
+        };
+        const brandingForFirestore = sanitizeBrandingForFirestore(nextBranding);
+
+        set({
+          eventBranding: nextBranding,
+          themeColors: getThemeColors(nextBranding),
+        });
+
+        const { db } = getFirebase();
+        await setDoc(getEventConfigRef(db, get().activeEventId), {
+          branding: brandingForFirestore,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        if (updates.title && updates.title.trim()) {
+          const nextEvents = get().eventsCatalog.map((e) =>
+            e.id === get().activeEventId ? { ...e, name: updates.title!.trim() } : e
+          );
+          set({ eventsCatalog: nextEvents });
+          await setDoc(getEventsIndexRef(db), {
+            events: nextEvents,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
         }
       },
 
@@ -451,7 +1108,7 @@ export const useWaveStore = create<WaveStore>()(
           const { db } = getFirebase();
           
           // Save config to Firebase
-          const configRef = doc(db, 'config', 'global');
+          const configRef = getEventConfigRef(db, get().activeEventId);
           await setDoc(configRef, {
             customEvents: events,
             updatedAt: new Date().toISOString()
@@ -460,7 +1117,7 @@ export const useWaveStore = create<WaveStore>()(
           // Update all existing participants in Firebase with new events
           
           for (const [waveId, wave] of Object.entries(updatedWaves)) {
-            const waveRef = doc(db, 'waves', waveId);
+            const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
             const participantsCol = collection(waveRef, 'participants');
             
             for (const participant of wave.participants) {
@@ -486,7 +1143,7 @@ export const useWaveStore = create<WaveStore>()(
         const s = get();
 
         // Save global config
-        const configRef = doc(collection(db, 'config'), 'global');
+        const configRef = getEventConfigRef(db, s.activeEventId);
         const batch = writeBatch(db);
         batch.set(configRef, {
           customEvents: s.customEvents,
@@ -497,6 +1154,7 @@ export const useWaveStore = create<WaveStore>()(
           },
           eventNotes: s.eventNotes,
           maxParticipants: s.maxParticipants,
+          eventClockEnabled: s.eventClockEnabled,
           updatedAt: serverTimestamp(),
         }, { merge: true });
 
@@ -506,7 +1164,7 @@ export const useWaveStore = create<WaveStore>()(
           const filteredParticipants = wave.participants.filter(
             (p) => p.name && p.name.trim().length > 0
           );
-          const waveRef = doc(collection(db, 'waves'), wave.id);
+          const waveRef = doc(getEventWavesCollection(db, s.activeEventId), wave.id);
           batch.set(waveRef, {
             id: wave.id,
             name: wave.name,
@@ -553,12 +1211,13 @@ export const useWaveStore = create<WaveStore>()(
         const { db } = getFirebase();
 
         try {
-          const cfgRef = doc(collection(db, 'config'), 'global');
+          const cfgRef = getEventConfigRef(db, get().activeEventId);
           const cfgSnap = await getDoc(cfgRef);
+          let eventPasscode: string | null = null;
           if (cfgSnap.exists()) {
-            const data = cfgSnap.data() as any;
+            const data = cfgSnap.data() as FirebaseConfigData;
             secureLogger.log('📋 Loaded config from Firebase:', data);
-            
+
             if (Array.isArray(data.customEvents)) {
               set({ customEvents: data.customEvents as string[] });
             }
@@ -596,8 +1255,50 @@ export const useWaveStore = create<WaveStore>()(
               set({ alertSettings: data.alertSettings });
             }
             if (typeof data.accessPasscode === 'string') {
-              set({ accessPasscode: data.accessPasscode });
+              eventPasscode = data.accessPasscode;
             }
+            if (typeof data.eventClockEnabled === 'boolean') {
+              set({ eventClockEnabled: data.eventClockEnabled });
+            }
+            // Always fully overwrite eventBranding with Firestore data + defaults
+            const b = (data.branding || {}) as Partial<EventBranding>;
+            const theme = b.theme || DEFAULT_BRANDING.theme;
+            const nextBranding: EventBranding = {
+              title: typeof b.title === 'string' && b.title.trim() ? b.title : DEFAULT_BRANDING.title,
+              emojiLeft: typeof b.emojiLeft === 'string' ? b.emojiLeft : DEFAULT_BRANDING.emojiLeft,
+              emojiRight: typeof b.emojiRight === 'string' ? b.emojiRight : DEFAULT_BRANDING.emojiRight,
+              theme,
+              customColor: b.customColor
+                ? normalizeHexColor(b.customColor, THEME_PRESETS[theme].accent)
+                : undefined,
+              customGradient: b.customGradient
+                ? {
+                    start: normalizeHexColor(b.customGradient.start, THEME_PRESETS[theme].start),
+                    mid: normalizeHexColor(b.customGradient.mid, THEME_PRESETS[theme].mid),
+                    end: normalizeHexColor(b.customGradient.end, THEME_PRESETS[theme].end),
+                  }
+                : undefined,
+            };
+            set({
+              eventBranding: nextBranding,
+              themeColors: getThemeColors(nextBranding),
+            });
+          }
+
+          const sharedRef = getGlobalSettingsRef(db);
+          const sharedSnap = await getDoc(sharedRef);
+          if (sharedSnap.exists()) {
+            const sharedData = sharedSnap.data() as FirebaseConfigData;
+            if (typeof sharedData.accessPasscode === 'string') {
+              set({ accessPasscode: sharedData.accessPasscode });
+            }
+          } else if (eventPasscode) {
+            // One-time migration path: promote existing event-scoped passcode to global setting.
+            await setDoc(sharedRef, {
+              accessPasscode: eventPasscode,
+              updatedAt: new Date().toISOString(),
+            }, { merge: true });
+            set({ accessPasscode: eventPasscode });
           }
         } catch (e) {
           secureLogger.error('Error loading config:', e);
@@ -606,10 +1307,11 @@ export const useWaveStore = create<WaveStore>()(
 
       // Load data from Firebase on app startup (with caching)
       loadAll: async () => {
-        const state = get();
-        
         // Always load fresh data from Firebase (no caching)
         secureLogger.log('🔄 Loading fresh data from Firebase...');
+
+        // Ensure active event and event list are loaded first
+        await get().loadEventsCatalog();
         
         // Load global config first
         await get().loadGlobalConfig();
@@ -617,20 +1319,18 @@ export const useWaveStore = create<WaveStore>()(
         // Load waves
         const { db } = getFirebase();
         try {
-          const wavesCol = collection(db, 'waves');
+          const wavesCol = getEventWavesCollection(db, get().activeEventId);
           const wavesSnap = await getDocs(wavesCol);
           
           secureLogger.log(`🌊 Found ${wavesSnap.docs.length} waves in Firebase`);
           
           const loaded: Record<string, Wave> = {};
           for (const waveDoc of wavesSnap.docs) {
-            const w = waveDoc.data() as any;
+            const w = waveDoc.data() as FirebaseWaveData;
             secureLogger.log(`🌊 Loading wave ${waveDoc.id}:`, w.name);
             
             // Load participants from subcollection
-            const participantsCol = collection(waveDoc.ref, 'participants');
-            const partsSnap = await getDocs(participantsCol);
-            const participants = partsSnap.docs.map((d) => ({ ...(d.data() as any) })) as any[];
+            const participants = await loadWaveParticipants(waveDoc.ref);
             
             secureLogger.log(`👥 Found ${participants.length} participants in wave ${waveDoc.id}`);
             
@@ -638,7 +1338,7 @@ export const useWaveStore = create<WaveStore>()(
               id: waveDoc.id,
               name: w.name || waveDoc.id,
               startTime: w.startTime || '',
-              participants: participants as any,
+              participants,
             } as Wave;
           }
           
@@ -707,7 +1407,7 @@ export const useWaveStore = create<WaveStore>()(
         // Load active waves from Firebase (global active status)
         let globalActiveWaves = new Set<string>();
         try {
-          const activeWavesCol = collection(db, 'activeWaves');
+          const activeWavesCol = getEventActiveWavesCollection(db, get().activeEventId);
           const activeWavesSnap = await getDocs(activeWavesCol);
           globalActiveWaves = new Set(activeWavesSnap.docs.map(doc => doc.id));
           console.log(`🌐 Found ${globalActiveWaves.size} globally active waves:`, Array.from(globalActiveWaves));
@@ -731,7 +1431,7 @@ export const useWaveStore = create<WaveStore>()(
           // Only sync waves that are globally active (being edited by other users)
           for (const waveId of globalActiveWaves) {
             try {
-              const waveRef = doc(collection(db, 'waves'), waveId);
+              const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
               const waveSnap = await getDoc(waveRef);
               
               if (!waveSnap.exists()) {
@@ -739,18 +1439,16 @@ export const useWaveStore = create<WaveStore>()(
                 continue;
               }
               
-              const w = waveSnap.data() as any;
+              const w = waveSnap.data() as FirebaseWaveData;
               
               // Load participants from subcollection
-              const participantsCol = collection(waveRef, 'participants');
-              const partsSnap = await getDocs(participantsCol);
-              const participants = partsSnap.docs.map((d) => ({ ...(d.data() as any) })) as any[];
+              const participants = await loadWaveParticipants(waveRef);
               
               const firebaseWave = {
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
-                participants: participants,
+                participants,
               } as Wave;
               
               // Check if this wave has changed
@@ -793,7 +1491,7 @@ export const useWaveStore = create<WaveStore>()(
         // Load active waves from Firebase (global active status)
         let globalActiveWaves = new Set<string>();
         try {
-          const activeWavesCol = collection(db, 'activeWaves');
+          const activeWavesCol = getEventActiveWavesCollection(db, get().activeEventId);
           const activeWavesSnap = await getDocs(activeWavesCol);
           globalActiveWaves = new Set(activeWavesSnap.docs.map(doc => doc.id));
           console.log(`🌐 Found ${globalActiveWaves.size} globally active waves:`, Array.from(globalActiveWaves));
@@ -817,7 +1515,7 @@ export const useWaveStore = create<WaveStore>()(
           // Only sync waves that are globally active (being edited by other users)
           for (const waveId of globalActiveWaves) {
             try {
-              const waveRef = doc(collection(db, 'waves'), waveId);
+              const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
               const waveSnap = await getDoc(waveRef);
               
               if (!waveSnap.exists()) {
@@ -825,18 +1523,16 @@ export const useWaveStore = create<WaveStore>()(
                 continue;
               }
               
-              const w = waveSnap.data() as any;
+              const w = waveSnap.data() as FirebaseWaveData;
               
               // Load participants from subcollection
-              const participantsCol = collection(waveRef, 'participants');
-              const partsSnap = await getDocs(participantsCol);
-              const participants = partsSnap.docs.map((d) => ({ ...(d.data() as any) })) as any[];
+              const participants = await loadWaveParticipants(waveRef);
               
               const firebaseWave = {
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
-                participants: participants,
+                participants,
               } as Wave;
               
               // Check if this wave has changed
@@ -883,7 +1579,7 @@ export const useWaveStore = create<WaveStore>()(
           // Sync ALL waves, not just active ones
           for (const waveId of Object.keys(state.waves)) {
             try {
-              const waveRef = doc(collection(db, 'waves'), waveId);
+              const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
               const waveSnap = await getDoc(waveRef);
               
               if (!waveSnap.exists()) {
@@ -891,18 +1587,16 @@ export const useWaveStore = create<WaveStore>()(
                 continue;
               }
               
-              const w = waveSnap.data() as any;
+              const w = waveSnap.data() as FirebaseWaveData;
               
               // Load participants from subcollection
-              const participantsCol = collection(waveRef, 'participants');
-              const partsSnap = await getDocs(participantsCol);
-              const participants = partsSnap.docs.map((d) => ({ ...(d.data() as any) })) as any[];
+              const participants = await loadWaveParticipants(waveRef);
               
               const firebaseWave = {
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
-                participants: participants,
+                participants,
               } as Wave;
               
               // Check if this wave has changed
@@ -948,7 +1642,7 @@ export const useWaveStore = create<WaveStore>()(
         // Save active status to Firebase so other users can see it
         try {
           const { db } = getFirebase();
-          const activeRef = doc(collection(db, 'activeWaves'), waveId);
+          const activeRef = doc(getEventActiveWavesCollection(db, get().activeEventId), waveId);
           await setDoc(activeRef, {
             waveId,
             activeAt: new Date().toISOString(),
@@ -976,7 +1670,7 @@ export const useWaveStore = create<WaveStore>()(
         // Remove active status from Firebase
         try {
           const { db } = getFirebase();
-          const activeRef = doc(collection(db, 'activeWaves'), waveId);
+          const activeRef = doc(getEventActiveWavesCollection(db, get().activeEventId), waveId);
           await deleteDoc(activeRef);
           console.log(`🌐 Removed active status from Firebase for wave ${waveId}`);
         } catch (error) {
@@ -993,7 +1687,7 @@ export const useWaveStore = create<WaveStore>()(
         try {
           for (const [waveId, wave] of Object.entries(state.waves)) {
             console.log(`🌊 Force updating wave ${waveId} with ${wave.participants.length} participants`);
-            const waveRef = doc(db, 'waves', waveId);
+            const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
             const participantsCol = collection(waveRef, 'participants');
             
             for (const participant of wave.participants) {
@@ -1051,6 +1745,10 @@ export const useWaveStore = create<WaveStore>()(
       name: 'exos-wave-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
+        activeEventId: s.activeEventId,
+        eventsCatalog: s.eventsCatalog,
+        eventBranding: s.eventBranding,
+        themeColors: s.themeColors,
         // Only cache wave data and UI state - NOT global config
         waves: s.waves,
         currentWaveId: s.currentWaveId,
@@ -1061,46 +1759,61 @@ export const useWaveStore = create<WaveStore>()(
       onRehydrateStorage: () => (state) => {
         // Ensure all required fields have default values (will be overwritten by Firebase load)
         if (state) {
+          if (!state.activeEventId) {
+            state.activeEventId = DEFAULT_EVENT_ID;
+          }
+          if (!state.eventsCatalog || state.eventsCatalog.length === 0) {
+            state.eventsCatalog = [{ id: DEFAULT_EVENT_ID, name: 'G-ROX' }];
+          }
+          if (!state.eventBranding) {
+            state.eventBranding = DEFAULT_BRANDING;
+          }
+          if (!state.themeColors) {
+            state.themeColors = THEME_PRESETS[state.eventBranding.theme || DEFAULT_BRANDING.theme];
+          }
           // Set defaults for global config that will be loaded from Firebase
           // This prevents crashes while Firebase is loading
-          if (!(state as any).customEvents) {
-            (state as any).customEvents = WAVE_EVENTS;
+          if (!state.customEvents) {
+            state.customEvents = WAVE_EVENTS;
           }
-          if (!(state as any).intervalMinutes) {
-            (state as any).intervalMinutes = 5;
+          if (!state.intervalMinutes) {
+            state.intervalMinutes = 5;
           }
-          if (!(state as any).workMinutes) {
-            (state as any).workMinutes = 3;
+          if (!state.workMinutes) {
+            state.workMinutes = 3;
           }
-          if (!(state as any).restMinutes) {
-            (state as any).restMinutes = 2;
+          if (!state.restMinutes) {
+            state.restMinutes = 2;
           }
-          if (!(state as any).maxParticipants) {
-            (state as any).maxParticipants = 10;
+          if (!state.maxParticipants) {
+            state.maxParticipants = 10;
           }
-          if (!(state as any).workoutTimerWorkSeconds) {
-            (state as any).workoutTimerWorkSeconds = 60;
+          if (!state.workoutTimerWorkSeconds) {
+            state.workoutTimerWorkSeconds = 60;
           }
-          if (!(state as any).workoutTimerRestSeconds) {
-            (state as any).workoutTimerRestSeconds = 30;
+          if (!state.workoutTimerRestSeconds) {
+            state.workoutTimerRestSeconds = 30;
           }
-          if (!(state as any).eventStartDate) {
-            (state as any).eventStartDate = new Date().toISOString().split('T')[0];
+          if (!state.eventStartDate) {
+            state.eventStartDate = new Date().toISOString().split('T')[0];
           }
-          if (!(state as any).eventStartTime) {
-            (state as any).eventStartTime = '08:00';
+          if (!state.eventStartTime) {
+            state.eventStartTime = '08:00';
           }
-          if (!(state as any).totalWaves) {
-            (state as any).totalWaves = 30;
+          if (!state.totalWaves) {
+            state.totalWaves = 30;
           }
-          if (!(state as any).eventNotes) {
-            (state as any).eventNotes = '';
+          if (typeof state.eventClockEnabled !== 'boolean') {
+            state.eventClockEnabled = false;
           }
-          if (!(state as any).accessPasscode) {
-            (state as any).accessPasscode = '54321Blastoff!';
+          if (!state.eventNotes) {
+            state.eventNotes = '';
           }
-          if (!(state as any).alertSettings) {
-            (state as any).alertSettings = {
+          if (!state.accessPasscode) {
+            state.accessPasscode = '54321Blastoff!';
+          }
+          if (!state.alertSettings) {
+            state.alertSettings = {
               workRestTransitions: true,
               eventStartEnd: true,
               soundType: 'beep',

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import Link from 'next/link';
+
+import { useEffect, useState } from 'react';
 import { useWaveStore } from '@/store/waveStore';
 import WaveQuickViewCard from '@/components/WaveQuickViewCard';
 import ConfigurationModal from '@/components/ConfigurationModal';
@@ -10,40 +10,36 @@ import PasscodeProtection from '@/components/PasscodeProtection';
 import { getFirebase } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
-export default function Home() {
+export default function Page() {
   const [mounted, setMounted] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
   const {
     waves,
-    currentWaveId,
     eventNotes,
     accessPasscode,
+    activeEventId,
+    eventBranding,
     addWave,
-    setCurrentWave,
     setEventNotes,
     loadAll,
     syncWithFirebase,
     clearCacheAndReload,
-    forceUpdateAllParticipants,
   } = useWaveStore();
 
   const waveIds = Object.keys(waves);
-  const currentWave = currentWaveId ? waves[currentWaveId] : null;
 
   const handleManualSave = async () => {
     try {
       // Save event notes to Firebase
       const { db } = getFirebase();
-      const configRef = doc(db, 'config', 'global');
-      
+      const configRef = doc(db, 'events', activeEventId, 'config', 'global');
       await setDoc(configRef, {
         eventNotes: eventNotes,
         updatedAt: new Date().toISOString()
       }, { merge: true });
-      
       // Trigger immediate sync for other users
       await syncWithFirebase();
-      
       alert('Event notes saved successfully!');
     } catch (error) {
       console.error('❌ Failed to save event notes:', error);
@@ -53,24 +49,36 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true);
-    // Load data from Firebase on startup (with caching)
+    // Load data from Firebase on startup.
     loadAll();
-    
     // No automatic syncing on main page - only manual saves
-  }, []); // Empty dependency array - only run once on mount
+  }, [loadAll]);
+
+  useEffect(() => {
+    // Persist branding for client refreshes/debugging.
+    if (eventBranding?.title) {
+      try {
+        window.localStorage.setItem('eventBranding', JSON.stringify(eventBranding));
+      } catch {}
+    }
+  }, [eventBranding]);
 
   // Manual save system - users save when ready using the Save Wave button
 
+  // Prevent hydration mismatch: use deterministic fallback before mount.
   if (!mounted) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading Wave Tracker...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4 border-orange-500"></div>
+          <p className="text-gray-600">Loading event data...</p>
         </div>
       </div>
     );
   }
+
+  // Always define accent after mount
+  const accent = eventBranding?.customGradient?.mid || eventBranding?.customColor || '#ea580c';
 
   return (
     <PasscodeProtection requiredPasscode={accessPasscode}>
@@ -78,10 +86,10 @@ export default function Home() {
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
           <header className="text-center mb-8 relative">
             <div className="header-gradient p-8">
-              <div className="header-emoji header-emoji-left">💪</div>
-              <div className="header-emoji header-emoji-right">🔥</div>
+              <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
+              <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
               <div className="pt-8 sm:pt-4">
-                <h1 className="text-2xl sm:text-4xl header-title mb-2">🔥 G-ROX Wave Tracker 🔥</h1>
+                <h1 className="text-2xl sm:text-4xl header-title mb-2">{eventBranding.emojiLeft} {eventBranding.title} Wave Tracker {eventBranding.emojiRight}</h1>
                 <p className="text-white/90">Manage wave based events with ease</p>
               </div>
             </div>
@@ -89,14 +97,14 @@ export default function Home() {
 
         {/* Total Participant Count Summary */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-          <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-orange-500">
+          <div className="bg-white rounded-lg shadow-md p-4 border-l-4" style={{ borderLeftColor: accent }}>
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Total Participants</h2>
                 <p className="text-sm text-gray-600">Across all waves</p>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-orange-600">
+                <div className="text-3xl font-bold" style={{ color: accent }}>
                   {Object.values(waves).reduce((total, wave) => total + wave.participants.length, 0)}
                 </div>
                 <div className="text-sm text-gray-500">
@@ -118,6 +126,7 @@ export default function Home() {
                   <button
                     onClick={() => addWave()}
                     className="btn-primary text-white rounded-lg shadow-lg px-8 py-4 text-lg font-bold flex flex-col items-center justify-center transform hover:scale-105 transition-all duration-200"
+                    style={{ backgroundColor: accent }}
                     title="Add your first wave"
                   >
                     <span className="text-4xl mb-2">+</span>
@@ -132,6 +141,7 @@ export default function Home() {
                     <button
                       onClick={() => addWave()}
                       className="btn-primary text-white rounded-lg shadow-lg px-6 py-8 text-sm font-bold flex flex-col items-center justify-center w-full h-full min-h-[200px] transform hover:scale-105 transition-all duration-200"
+                      style={{ backgroundColor: accent }}
                       title="Add new wave"
                     >
                       <span className="text-3xl mb-2">+</span>
@@ -173,7 +183,10 @@ export default function Home() {
 
       {/* Floating Hamburger Menu */}
       <FloatingHamburgerMenu 
-        onConfigClick={() => setIsConfigOpen(true)} 
+        onSettingsClick={() => {
+          setConfigInitialTab('movement');
+          setIsConfigOpen(true);
+        }}
         currentPage="wave"
       />
 
@@ -182,6 +195,7 @@ export default function Home() {
       <ConfigurationModal 
         isOpen={isConfigOpen} 
         onClose={() => setIsConfigOpen(false)}
+        initialTab={configInitialTab}
         onClearCache={async () => {
           await clearCacheAndReload();
           alert('✅ Cache cleared! Fresh data loaded from Firebase.');

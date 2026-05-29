@@ -14,29 +14,30 @@ firebase emulators:start
 
 ### 3. Your local development will use the emulator instead of any Firebase project
 
-## Option 2: Use Development Firebase Project (Requires Billing)
+## Option 2: Use The Existing Firebase Project
 
-### 1. Create Default Database (No Billing Upgrade Needed)
-- Go to: https://console.firebase.google.com/project/wave-tracker-dev/overview
-- Click "Firestore Database"
-- Click "Create database"
-- **Choose "Start in test mode"**
-- **Select location** (same as production)
-- **This creates the default database without billing upgrade**
+### 1. Create .env.local
 
-### 2. Get Firebase Config
-- Project Settings → General → Your apps → Add app → Web app
-- Copy the config values
+Copy the current Firebase web app values into `.env.local`:
 
-### 3. Create .env.local
 ```
-NEXT_PUBLIC_FIREBASE_API_KEY=your_dev_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=wave-tracker-dev.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=wave-tracker-dev
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=wave-tracker-dev.firebasestorage.app
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_dev_messaging_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_dev_app_id
+NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyA5DE63qijpREwgRYnqn4e062EmZuZzN4M
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=wave-tracker-exos.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=wave-tracker-exos
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=wave-tracker-exos.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=436013164154
+NEXT_PUBLIC_FIREBASE_APP_ID=1:436013164154:web:6173d409da8f196ae53dc3
 ```
+
+### 2. Start the app
+
+```bash
+npm run dev
+```
+
+### 3. Deploy target
+
+Production Hosting now publishes to `https://wavetracker.web.app`.
 
 ## Recommendation: Use Emulator
 The emulator is completely free and gives you a local Firebase environment that's completely isolated from production.

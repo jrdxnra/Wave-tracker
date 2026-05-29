@@ -2,12 +2,12 @@ const { initializeFirestore, collection, getDocs } = require('firebase/firestore
 const { initializeApp } = require('firebase/app');
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBE-YcNr2OcqOIl7z56xyJXE9WU_fv0PYM",
+  apiKey: "AIzaSyA5DE63qijpREwgRYnqn4e062EmZuZzN4M",
   authDomain: "wave-tracker-exos.firebaseapp.com",
   projectId: "wave-tracker-exos",
   storageBucket: "wave-tracker-exos.firebasestorage.app",
-  messagingSenderId: "502899068851",
-  appId: "1:502899068851:web:cf49296aed67d18c2c5e83"
+  messagingSenderId: "436013164154",
+  appId: "1:436013164154:web:6173d409da8f196ae53dc3"
 };
 
 const app = initializeApp(firebaseConfig);

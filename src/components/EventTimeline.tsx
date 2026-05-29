@@ -120,8 +120,11 @@ export default function EventTimeline({
       
       <div className="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden">
         <div
-          className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-500 to-orange-600 transition-all duration-1000 ease-linear"
-          style={{ width: `${progress}%` }}
+          className="absolute top-0 left-0 h-full transition-all duration-1000 ease-linear"
+          style={{
+            width: `${progress}%`,
+            background: 'linear-gradient(to right, var(--brand-mid), var(--brand-start))',
+          }}
         />
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="text-xs font-semibold text-gray-700">

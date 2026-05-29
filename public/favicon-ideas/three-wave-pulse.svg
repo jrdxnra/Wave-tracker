@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Three-wave pulse favicon refined ocean">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0f1f"/>
+      <stop offset="100%" stop-color="#172554"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#bg)"/>
+  <path d="M12 25C18 19 26 19 32 25C38 31 46 31 52 25" fill="none" stroke="#475569" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M12 33C18 27 26 27 32 33C38 39 46 39 52 33" fill="none" stroke="#94a3b8" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M12 41C18 35 26 35 32 41C38 47 46 47 52 41" fill="none" stroke="#38bdf8" stroke-width="5.5" stroke-linecap="round"/>
+  <circle cx="50" cy="41" r="4" fill="#22d3ee"/>
+</svg>

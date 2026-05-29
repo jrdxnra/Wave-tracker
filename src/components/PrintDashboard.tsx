@@ -19,7 +19,7 @@ interface PrintDashboardProps {
 }
 
 export default function PrintDashboard({ wave }: PrintDashboardProps) {
-  const { customEvents, eventNotes, intervalMinutes, workMinutes, restMinutes } = useWaveStore();
+  const { customEvents, eventNotes, workMinutes, restMinutes, activeEventId, eventBranding } = useWaveStore();
 
   const handlePrint = async () => {
     const doSave = window.confirm(`Save changes for "${wave.name}" to cloud storage before printing?`);
@@ -28,15 +28,15 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
         
         // Save only this specific wave to Firebase
         const { db } = getFirebase();
-        await setDoc(doc(db, 'waves', wave.id), {
+        await setDoc(doc(db, 'events', activeEventId, 'waves', wave.id), {
           name: wave.name,
           startTime: wave.startTime,
           participants: wave.participants
         }, { merge: true });
         
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('❌ Save failed:', e);
-        alert(`Save failed: ${e?.message || e}`);
+        alert(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
         return; // Don't proceed with print if save failed
       }
     }
@@ -95,7 +95,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Wave Tracker - ${wave.name}</title>
+          <title>${eventBranding.title} - ${wave.name}</title>
           <style>
             body { 
               margin: 0; 
@@ -123,7 +123,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
               opacity: 0.7;
             }
             .header:after {
-              content: '🔥';
+              content: '${eventBranding.emojiRight}';
               position: absolute;
               top: 10px;
               right: 20px;
@@ -363,7 +363,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
         </head>
         <body>
           <div class="header">
-            <div class="title">G-ROX Wave Tracker</div>
+            <div class="title">${eventBranding.title} Wave Tracker</div>
             <div class="wave-name">🏃‍♂️ ${wave.name}</div>
             ${wave.startTime ? `<div class="start-time">Start Time: ${wave.startTime}</div>` : ''}
           </div>

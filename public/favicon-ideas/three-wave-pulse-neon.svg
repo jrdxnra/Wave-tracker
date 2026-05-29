@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Three-wave pulse favicon neon">
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#060b18"/>
+  <path d="M12 25C18 19 26 19 32 25C38 31 46 31 52 25" fill="none" stroke="#1e293b" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M12 33C18 27 26 27 32 33C38 39 46 39 52 33" fill="none" stroke="#14b8a6" stroke-opacity="0.72" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M12 41C18 35 26 35 32 41C38 47 46 47 52 41" fill="none" stroke="#a3e635" stroke-width="5.5" stroke-linecap="round"/>
+  <circle cx="50" cy="41" r="4" fill="#bef264"/>
+</svg>

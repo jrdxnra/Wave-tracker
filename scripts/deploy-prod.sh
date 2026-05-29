@@ -1,32 +1,40 @@
 #!/bin/bash
 
-# Production Deployment Script for Wave Tracker
-# This script ensures we only deploy to the production project
+set -euo pipefail
 
-echo "🚀 Deploying to PRODUCTION environment..."
+# Hosting deployment script for Wave Tracker production live site
+
+if [ "${ALLOW_PROD_DEPLOY:-}" != "YES" ]; then
+    echo ""
+    echo "Production deploy is blocked by default."
+    echo "To deploy to production, run:"
+    echo "ALLOW_PROD_DEPLOY=YES npm run deploy:prod"
+    echo ""
+    exit 1
+fi
+
+echo "🚀 Deploying Wave Tracker hosting..."
 echo "📍 Project: Wave Tracker (wave-tracker-exos)"
-echo "🎨 Theme: Orange"
-echo "🌐 URL: https://wave-tracker-exos.web.app"
+echo "🌐 URL: https://wavetracker.web.app"
 echo ""
 
 # Check current Firebase project
-CURRENT_PROJECT=$(firebase use --quiet)
+CURRENT_PROJECT=$(firebase use)
 echo "Current Firebase project: $CURRENT_PROJECT"
 
 if [ "$CURRENT_PROJECT" != "wave-tracker-exos" ]; then
-    echo "⚠️  Switching to production project..."
+    echo "⚠️  Switching to wave-tracker-exos project..."
     firebase use wave-tracker-exos
 fi
 
 # Build the project
-echo "🔨 Building production app..."
+echo "🔨 Building app..."
 npm run build
 
 # Deploy to production hosting
-echo "🚀 Deploying to production hosting..."
-firebase deploy --only hosting
+echo "🚀 Deploying to hosting..."
+firebase deploy --only hosting --project wave-tracker-exos
 
 echo ""
-echo "✅ Production deployment complete!"
-echo "🟠 Visit your orange production app: https://wave-tracker-exos.web.app"
-echo "🟣 Development app (purple): https://wave-tracker-dev.web.app"
+echo "✅ Hosting deployment complete!"
+echo "Visit: https://wavetracker.web.app"

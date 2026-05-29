@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --brand-start: #ea580c;
+  --brand-mid: #f97316;
+  --brand-end: #fbbf24;
+  --brand-accent: #ea580c;
+  --brand-accent-hover: #c2410c;
+}
+
 /* Cosmic Orange-to-Yellow Ombre Theme */
 body {
     font-family: 'Inter', sans-serif;
@@ -26,11 +34,11 @@ body:before {
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: #f3f4f6; /* gray-100 */ }
 ::-webkit-scrollbar-thumb { 
-  background: linear-gradient(180deg, #ea580c 0%, #fbbf24 100%); /* orange to yellow ombre */
+  background: linear-gradient(180deg, var(--brand-start) 0%, var(--brand-end) 100%);
   border-radius: 4px; 
 }
 ::-webkit-scrollbar-thumb:hover { 
-  background: linear-gradient(180deg, #c2410c 0%, #f59e0b 100%); 
+  background: linear-gradient(180deg, var(--brand-accent-hover) 0%, var(--brand-end) 100%);
 }
 
 /* Tabs */
@@ -46,10 +54,10 @@ body:before {
     white-space: nowrap;
 }
 .tab-button.active {
-    color: #ea580c; /* orange-600 */
-    border-bottom-color: #ea580c;
+  color: var(--brand-accent);
+  border-bottom-color: var(--brand-accent);
 }
-.tab-button:hover { color: #f59e0b; /* amber-500 */ }
+.tab-button:hover { color: var(--brand-end); }
 
 .tab-content { display: none; animation: fadeIn 0.3s; }
 .tab-content.active { display: block; }
@@ -62,7 +70,7 @@ body:before {
 
 /* Shared Header Styles */
 .header-gradient {
-  background: linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fbbf24 100%);
+  background: linear-gradient(135deg, var(--brand-start) 0%, var(--brand-mid) 50%, var(--brand-end) 100%);
   border-radius: 12px;
   color: white;
   position: relative;
@@ -95,7 +103,7 @@ body:before {
 
 /* Cosmic Orange-to-Yellow Ombre Design System */
 .btn-primary { 
-  background: linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fbbf24 100%); /* orange to yellow ombre */
+  background: linear-gradient(135deg, var(--brand-start) 0%, var(--brand-mid) 50%, var(--brand-end) 100%);
   color: white; 
   transition: all 0.3s ease;
   border: none;
@@ -103,7 +111,7 @@ body:before {
   overflow: hidden;
 }
 .btn-primary:hover { 
-  background: linear-gradient(135deg, #c2410c 0%, #ea580c 50%, #f59e0b 100%);
+  background: linear-gradient(135deg, var(--brand-accent-hover) 0%, var(--brand-start) 50%, var(--brand-end) 100%);
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(234, 88, 12, 0.4);
 }
@@ -159,7 +167,7 @@ body:before {
 
 .btn-outline { 
   background: transparent; 
-  color: #ea580c; 
+  color: var(--brand-accent);
   border: 2px solid transparent;
   background-clip: padding-box;
   position: relative;
@@ -175,14 +183,14 @@ body:before {
   z-index: -1;
   margin: -2px;
   border-radius: inherit;
-  background: linear-gradient(135deg, #ea580c, #fbbf24);
+  background: linear-gradient(135deg, var(--brand-start), var(--brand-end));
 }
 .btn-outline:hover { 
   color: white;
   transform: translateY(-2px);
 }
 .btn-outline:hover:before {
-  background: linear-gradient(135deg, #c2410c, #f59e0b);
+  background: linear-gradient(135deg, var(--brand-accent-hover), var(--brand-end));
 }
 
 /* Print Only */

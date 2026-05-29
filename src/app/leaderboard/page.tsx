@@ -20,7 +20,8 @@ interface ExerciseLeaderboard {
 export default function Leaderboard() {
   const [mounted, setMounted] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const { waves, customEvents, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, clearCacheAndReload, loadGlobalConfig, loadAll } = useWaveStore();
+  const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
+  const { waves, customEvents, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, eventBranding, clearCacheAndReload, loadAll } = useWaveStore();
   const [exerciseLeaderboards, setExerciseLeaderboards] = useState<ExerciseLeaderboard[]>([]);
   const [totalLeaderboard, setTotalLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [expandedLeaderboard, setExpandedLeaderboard] = useState<string | null>(null);
@@ -257,10 +258,10 @@ export default function Leaderboard() {
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
         <header className="text-center mb-8 relative">
           <div className="header-gradient p-8">
-            <div className="header-emoji header-emoji-left">🏆</div>
-            <div className="header-emoji header-emoji-right">🥇</div>
+            <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
+            <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
             <div className="pt-8 sm:pt-4">
-              <h1 className="text-2xl sm:text-4xl header-title mb-2">🏆 G-ROX Leaderboard 🏆</h1>
+              <h1 className="text-2xl sm:text-4xl header-title mb-2">{eventBranding.emojiLeft} {eventBranding.title} Leaderboard {eventBranding.emojiRight}</h1>
               <p className="text-white/90">Top performers across all waves</p>
             </div>
           </div>
@@ -311,7 +312,10 @@ export default function Leaderboard() {
 
       {/* Floating Hamburger Menu */}
       <FloatingHamburgerMenu 
-        onConfigClick={() => setIsConfigOpen(true)} 
+        onSettingsClick={() => {
+          setConfigInitialTab('movement');
+          setIsConfigOpen(true);
+        }}
         currentPage="leaderboard"
       />
       
@@ -319,6 +323,7 @@ export default function Leaderboard() {
       <ConfigurationModal 
         isOpen={isConfigOpen} 
         onClose={() => setIsConfigOpen(false)}
+        initialTab={configInitialTab}
         onClearCache={async () => {
           await clearCacheAndReload();
           alert('✅ Cache cleared! Fresh data loaded from Firebase.');
