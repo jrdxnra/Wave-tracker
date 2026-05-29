@@ -594,14 +594,14 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               onChange={(e) => setNewEvent(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddEvent()}
               placeholder="Type movement name and press Enter"
-              className="flex-1 h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              className="w-full flex-1 h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
             />
             <button
               onClick={handleAddEvent}
               disabled={!newEvent.trim() || events.includes(newEvent.trim())}
               onMouseEnter={() => setIsAddButtonHover(true)}
               onMouseLeave={() => setIsAddButtonHover(false)}
-              className="h-10 px-4 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full sm:w-auto h-10 px-4 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               style={{
                 backgroundColor: isAddButtonHover ? themeColors.accentHover : themeColors.accent,
               }}
@@ -661,7 +661,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                     aria-label={`Movement name ${index + 1}`}
                   />
                 </div>
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2">
                   {movementTimingModeLocal === 'individual' && (
                     <>
                       <input
@@ -678,7 +678,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                             },
                           }));
                         }}
-                        className="w-16 h-9 px-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                        className="w-16 h-9 px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
                         aria-label={`Work minutes for ${movementName}`}
                       />
                       <input
@@ -695,7 +695,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                             },
                           }));
                         }}
-                        className="w-16 h-9 px-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                        className="w-16 h-9 px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
                         aria-label={`Rest minutes for ${movementName}`}
                       />
                     </>
@@ -703,7 +703,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   <button
                     onClick={() => handleMoveUp(index)}
                     disabled={index === 0}
-                    className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="shrink-0 p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Move Up"
                   >
                     ↑
@@ -711,14 +711,14 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   <button
                     onClick={() => handleMoveDown(index)}
                     disabled={index === events.length - 1}
-                    className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="shrink-0 p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Move Down"
                   >
                     ↓
                   </button>
                   <button
                     onClick={() => handleRemoveEvent(index)}
-                    className="p-1 text-red-500 hover:text-red-700"
+                    className="shrink-0 p-1 text-red-500 hover:text-red-700"
                     title="Remove"
                   >
                     ×
@@ -855,63 +855,65 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       <div className="space-y-6" ref={emojiPickerRef}>
         <div>
           <div className="grid grid-cols-1 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Event Title *</label>
-              <input
-                type="text"
-                value={brandTitle}
-                onChange={(e) => setBrandTitle(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-                required
-              />
-            </div>
-            <div>
-              <div className="flex items-center justify-between gap-3 mb-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-medium text-gray-900">Event Clock Settings</h3>
-                  {renderInfoTip(
-                    'Wave Start Interval: Time between each wave starting (e.g., Wave 1 at 8:00, Wave 2 at 8:10).\nWork + Rest: Duration of each movement station. Movement times on performance/print sheets are calculated using Work + Rest.',
-                    'Event Clock tips'
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void setEventClockEnabled(!eventClockEnabled);
-                  }}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                    eventClockEnabled
-                      ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
-                      : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
-                  }`}
-                >
-                  {eventClockEnabled ? 'Disable Clock' : 'Enable Clock'}
-                </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Event Title *</label>
+                <input
+                  type="text"
+                  value={brandTitle}
+                  onChange={(e) => setBrandTitle(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                  required
+                />
               </div>
-              {movementTimingModeLocal === 'global' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Work (min)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={work}
-                      onChange={(e) => setWork(parseInt(e.target.value || '0', 10))}
-                      className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-                    />
+              <div>
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-medium text-gray-900">Event Clock Settings</h3>
+                    {renderInfoTip(
+                      'Wave Start Interval: Time between each wave starting (e.g., Wave 1 at 8:00, Wave 2 at 8:10).\nWork + Rest: Duration of each movement station. Movement times on performance/print sheets are calculated using Work + Rest.',
+                      'Event Clock tips'
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rest / Transition (min)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={rest}
-                      onChange={(e) => setRest(parseInt(e.target.value || '0', 10))}
-                      className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void setEventClockEnabled(!eventClockEnabled);
+                    }}
+                    className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                      eventClockEnabled
+                        ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
+                        : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                    }`}
+                  >
+                    {eventClockEnabled ? 'Disable Clock' : 'Enable Clock'}
+                  </button>
                 </div>
-              )}
+                {movementTimingModeLocal === 'global' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Work (min)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={work}
+                        onChange={(e) => setWork(parseInt(e.target.value || '0', 10))}
+                        className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Rest / Transition (min)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={rest}
+                        onChange={(e) => setRest(parseInt(e.target.value || '0', 10))}
+                        className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Gradient Colors</label>

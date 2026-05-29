@@ -1341,7 +1341,14 @@ export const useWaveStore = create<WaveStore>()(
 
       // Load data from Firebase on app startup (with caching)
       loadAll: async () => {
-        // Always load fresh data from Firebase (no caching)
+        const state = get();
+        const FRESHNESS_TTL_MS = 30_000; // 30 seconds
+        const age = state.lastFirebaseSync ? Date.now() - state.lastFirebaseSync : Infinity;
+        if (state.isDataLoaded && age < FRESHNESS_TTL_MS) {
+          secureLogger.log(`⚡ loadAll skipped — data is fresh (${Math.round(age / 1000)}s old)`);
+          return;
+        }
+
         secureLogger.log('🔄 Loading fresh data from Firebase...');
 
         // Ensure active event and event list are loaded first

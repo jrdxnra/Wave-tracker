@@ -10,14 +10,15 @@ import EventClock from '@/components/EventClock';
 import PasscodeProtection from '@/components/PasscodeProtection';
 
 export default function PerformancePage() {
+  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, eventBranding, activeEventId, eventClockEnabled, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, loadAll, setUserActivity, isDataLoaded } = useWaveStore();
+
   const [mounted, setMounted] = useState(false);
-  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
+  // Pre-initialize as complete when store already has data (instant page transitions)
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(isDataLoaded);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
   const [selectedWaveId, setSelectedWaveId] = useState<string | null>(null);
   const router = useRouter();
-  
-  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, eventBranding, activeEventId, eventClockEnabled, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, loadAll, setUserActivity } = useWaveStore();
   const waveIds = Object.keys(waves);
   
   // Use local selectedWaveId for tab persistence, fallback to currentWaveId
@@ -27,7 +28,6 @@ export default function PerformancePage() {
   useEffect(() => {
     let isCancelled = false;
     setMounted(true);
-    // Always load complete event data before first render of performance table.
     (async () => {
       await loadAll();
       if (!isCancelled) {
@@ -60,7 +60,7 @@ export default function PerformancePage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pageshow', handlePageShow);
     };
-  }, [loadAll]);
+  }, [loadAll, isDataLoaded]);
 
   // No background sync - only sync on page load and after saves
 
