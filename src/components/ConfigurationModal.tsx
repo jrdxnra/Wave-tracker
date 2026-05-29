@@ -6,6 +6,14 @@ import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { useWaveStore } from '@/store/waveStore';
 import PasscodeProtection from '@/components/PasscodeProtection';
 
+function escapeCsvValue(value: string | number): string {
+  const stringValue = String(value ?? '');
+  if (/[",\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+}
+
 type BrandTheme = 'orange' | 'blue' | 'emerald' | 'sunset';
 const CREATE_NEW_EVENT_OPTION = '__create_new_event__';
 const DEFAULT_EVENT_ID = 'g-rox';
@@ -91,7 +99,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     movementTimingMode, movementIntervals,
     setTimingConfig, setMaxParticipants, setWorkoutTimerConfig, setEventConfig, setAccessPasscode,
     loadGlobalConfig, eventBranding, eventClockEnabled, setEventClockEnabled, themeColors,
-    eventsCatalog, activeEventId, loadEventsCatalog, createEvent, deleteEvent, setActiveEvent, updateEventBranding
+    eventsCatalog, activeEventId, loadEventsCatalog, createEvent, deleteEvent, setActiveEvent, updateEventBranding,
+    feedbackEnabled, setFeedbackEnabled, loadFeedbackEntries, passcodeProtectionEnabled, setPasscodeProtectionEnabled
   } = useWaveStore();
   
   const [activeTab, setActiveTab] = useState<'movement' | 'event' | 'security'>(initialTab);
@@ -112,6 +121,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [startTime, setStartTime] = useState<string>(eventStartTime);
   const [waves, setWaves] = useState<number>(totalWaves);
   const [passcode, setPasscode] = useState<string>(accessPasscode);
+  const [passcodeProtectionEnabledLocal, setPasscodeProtectionEnabledLocal] = useState<boolean>(passcodeProtectionEnabled);
+  const [feedbackEnabledLocal, setFeedbackEnabledLocal] = useState<boolean>(feedbackEnabled);
 
   const [newEventName, setNewEventName] = useState('');
   const [newEventMovementTimingMode, setNewEventMovementTimingMode] = useState<'global' | 'individual'>('global');
@@ -130,6 +141,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [openEmojiPicker, setOpenEmojiPicker] = useState<'left' | 'right' | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
+  const [isDownloadingFeedback, setIsDownloadingFeedback] = useState(false);
+  const [isUpdatingPasscodeToggle, setIsUpdatingPasscodeToggle] = useState(false);
+  const [isUpdatingFeedbackToggle, setIsUpdatingFeedbackToggle] = useState(false);
   const [isSwitchingEvent, setIsSwitchingEvent] = useState(false);
   const [isHydratingConfig, setIsHydratingConfig] = useState(false);
   const [isAddButtonHover, setIsAddButtonHover] = useState(false);
@@ -175,7 +189,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setStartTime(eventStartTime);
     setWaves(totalWaves);
     setPasscode(accessPasscode);
-  }, [customEvents, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode]);
+    setPasscodeProtectionEnabledLocal(passcodeProtectionEnabled);
+    setFeedbackEnabledLocal(feedbackEnabled);
+  }, [customEvents, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode, passcodeProtectionEnabled, feedbackEnabled]);
 
   useEffect(() => {
     setMovementIntervalsLocal((prev) => {
@@ -260,6 +276,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         }
 
         await setAccessPasscode(passcode.trim());
+        await setPasscodeProtectionEnabled(passcodeProtectionEnabledLocal);
+        await setFeedbackEnabled(feedbackEnabledLocal);
         onClose();
         return;
       }
@@ -285,6 +303,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       await setWorkoutTimerConfig(Math.max(1, Math.round(timerWorkSeconds)), Math.max(1, Math.round(timerRestSeconds)));
       await setEventConfig(startDate, startTime, Math.max(1, Math.round(waves)));
       await setAccessPasscode(passcode);
+      await setPasscodeProtectionEnabled(passcodeProtectionEnabledLocal);
+      await setFeedbackEnabled(feedbackEnabledLocal);
 
       await updateEventBranding({
         title: brandTitle.trim(),
@@ -400,6 +420,93 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setGradientEnd(preset.end);
   };
 
+  const handleDownloadFeedbackCsv = async () => {
+    if (isCreatingNewEvent) {
+      alert('Create the event before downloading feedback.');
+      return;
+    }
+
+    setIsDownloadingFeedback(true);
+    try {
+      const exportEventId = selectedEventId === CREATE_NEW_EVENT_OPTION ? activeEventId : selectedEventId;
+      const selectedEvent = eventsCatalog.find((event) => event.id === exportEventId);
+      const entries = await loadFeedbackEntries(exportEventId);
+
+      if (entries.length === 0) {
+        alert('No feedback has been submitted yet for this event.');
+        return;
+      }
+
+      const csvRows = [
+        ['eventId', 'eventName', 'rating', 'message', 'submittedAt'],
+        ...entries.map((entry) => [
+          entry.eventId,
+          selectedEvent?.name || brandTitle.trim() || exportEventId,
+          entry.rating,
+          entry.message,
+          entry.createdAt,
+        ]),
+      ];
+
+      const csvContent = csvRows
+        .map((row) => row.map((value) => escapeCsvValue(value)).join(','))
+        .join('\n');
+
+      const fileNameBase = (selectedEvent?.name || brandTitle || exportEventId)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'feedback';
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${fileNameBase}-feedback.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('❌ Failed to download feedback CSV:', error);
+      alert('Failed to download feedback CSV. Please try again.');
+    } finally {
+      setIsDownloadingFeedback(false);
+    }
+  };
+
+  const handlePasscodeToggle = async () => {
+    const nextEnabled = !passcodeProtectionEnabledLocal;
+    setPasscodeProtectionEnabledLocal(nextEnabled);
+    setIsUpdatingPasscodeToggle(true);
+
+    try {
+      await setPasscodeProtectionEnabled(nextEnabled);
+    } catch (error) {
+      console.error('❌ Failed to update passcode protection:', error);
+      setPasscodeProtectionEnabledLocal(!nextEnabled);
+      alert('Failed to update passcode protection. Please try again.');
+    } finally {
+      setIsUpdatingPasscodeToggle(false);
+    }
+  };
+
+  const handleFeedbackToggle = async () => {
+    const nextEnabled = !feedbackEnabledLocal;
+    setFeedbackEnabledLocal(nextEnabled);
+    setIsUpdatingFeedbackToggle(true);
+
+    try {
+      await setFeedbackEnabled(nextEnabled);
+    } catch (error) {
+      console.error('❌ Failed to update feedback visibility:', error);
+      setFeedbackEnabledLocal(!nextEnabled);
+      alert('Failed to update feedback visibility. Please try again.');
+    } finally {
+      setIsUpdatingFeedbackToggle(false);
+    }
+  };
+
   const renderGradientPresetPicker = () => (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">Quick Theme Presets</label>
@@ -427,18 +534,18 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     </div>
   );
 
-  const renderInfoTip = (tipText: string, label: string) => (
+  const renderInfoTip = (tipText: string, label: string, align: 'left' | 'right' = 'left') => (
     <span className="relative inline-flex group">
       <button
         type="button"
-        className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[10px] font-semibold text-gray-600 cursor-help"
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[10px] font-semibold text-gray-600 cursor-pointer"
         aria-label={label}
       >
         i
       </button>
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-72 -translate-x-1/2 rounded-md border border-gray-200 bg-white p-2 text-xs text-gray-800 shadow-md opacity-0 transition-opacity duration-150 whitespace-pre-line group-hover:opacity-100 group-focus-within:opacity-100"
+        className={`pointer-events-none absolute top-full z-30 mt-2 w-72 rounded-md border border-gray-200 bg-white p-2 text-xs text-gray-800 shadow-md opacity-0 transition-opacity duration-150 whitespace-pre-line group-hover:opacity-100 group-focus-within:opacity-100 ${align === 'right' ? 'right-0' : 'left-0'}`}
       >
         <span className="space-y-1 block">
           {tipText.split('\n').map((rawLine, index) => {
@@ -514,10 +621,31 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     tabContent = (
       <div className="space-y-6">
         <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-3">Site Access Control</h3>
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-3">
-            <h4 className="text-[11px] font-semibold text-yellow-900 mb-1 uppercase tracking-wide">Shared Setting</h4>
-            <p className="text-[13px] text-yellow-700">This passcode is global for the entire site and is not tied to the selected event.</p>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-lg font-medium text-gray-900">Site Access Control</h3>
+            {renderInfoTip(
+              'Shared Setting: This passcode is global for the entire site and is not tied to the selected event.',
+              'Site Access Control information'
+            )}
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 mb-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900">Passcode Protection</h4>
+                <p className="text-xs text-gray-600">Enable or disable the passcode wall for protected pages.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void handlePasscodeToggle();
+                }}
+                disabled={isUpdatingPasscodeToggle}
+                className="min-w-[100px] rounded-md px-3 py-2 text-sm font-semibold text-white transition-colors"
+                style={{ backgroundColor: passcodeProtectionEnabledLocal ? themeColors.accent : '#6b7280' }}
+              >
+                {isUpdatingPasscodeToggle ? 'Saving...' : passcodeProtectionEnabledLocal ? 'Enabled' : 'Disabled'}
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-4">
             <div>
@@ -527,8 +655,53 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 value={passcode}
                 onChange={(e) => setPasscode(e.target.value)}
                 placeholder="Enter passcode"
+                disabled={!passcodeProtectionEnabledLocal}
                 className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
               />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-lg font-medium text-gray-900">Feedback</h3>
+            {renderInfoTip(
+              'All submissions are saved to this event only, and Download Feedback CSV exports only this event\'s responses.',
+              'Feedback CSV information'
+            )}
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900">Floating Feedback Box</h4>
+                <p className="text-xs text-gray-600">Show or hide the feedback card at the bottom of the leaderboard page for this event.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleFeedbackToggle();
+                }}
+                disabled={isUpdatingFeedbackToggle}
+                className="min-w-[100px] rounded-md px-3 py-2 text-sm font-semibold text-white transition-colors"
+                style={{ backgroundColor: feedbackEnabledLocal ? themeColors.accent : '#6b7280' }}
+              >
+                {isUpdatingFeedbackToggle ? 'Saving...' : feedbackEnabledLocal ? 'Enabled' : 'Disabled'}
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-gray-600">Feedback is stored in Firebase and can be exported here as CSV.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleDownloadFeedbackCsv();
+                }}
+                disabled={isDownloadingFeedback || isCreatingNewEvent}
+                className="rounded-md px-4 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ backgroundColor: themeColors.accent }}
+              >
+                {isDownloadingFeedback ? 'Preparing CSV...' : 'Download Feedback CSV'}
+              </button>
             </div>
           </div>
         </div>
@@ -968,7 +1141,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                     <h3 className="text-lg font-medium text-gray-900">Event Clock Settings</h3>
                     {renderInfoTip(
                       'Wave Start Interval: Time between each wave starting (e.g., Wave 1 at 8:00, Wave 2 at 8:10).\nWork + Rest: Duration of each movement station. Movement times on performance/print sheets are calculated using Work + Rest.',
-                      'Event Clock tips'
+                      'Event Clock tips',
+                      'right'
                     )}
                 </div>
                 <button

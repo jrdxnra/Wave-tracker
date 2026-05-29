@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Participant, Wave, WAVE_EVENTS } from '@/types';
+import { FeedbackEntry, Participant, Wave, WAVE_EVENTS } from '@/types';
 import { getFirebase } from '@/lib/firebase';
 import { collection, collectionGroup, doc, setDoc, writeBatch, serverTimestamp, getDoc, getDocs, deleteDoc, DocumentReference, Firestore } from 'firebase/firestore';
 import { secureLogger } from '@/lib/secureLogger';
@@ -159,6 +159,7 @@ function buildDefaultEventConfig(title: string, date = new Date()): FirebaseConf
     },
     accessPasscode: '54321Blastoff!',
     eventClockEnabled: false,
+    feedbackEnabled: false,
     branding: {
       title,
       emojiLeft: '',
@@ -203,6 +204,10 @@ function getEventActiveWavesCollection(db: Firestore, eventId: string) {
   return collection(db, 'events', eventId, 'activeWaves');
 }
 
+function getEventFeedbackCollection(db: Firestore, eventId: string) {
+  return collection(db, 'events', eventId, 'feedback');
+}
+
 function getEventsIndexRef(db: Firestore) {
   return doc(db, 'config', 'eventsIndex');
 }
@@ -245,6 +250,9 @@ async function deleteEventFromFirestore(db: Firestore, eventId: string): Promise
   const activeWavesSnap = await getDocs(getEventActiveWavesCollection(db, eventId));
   await deleteDocsInBatches(db, activeWavesSnap.docs.map((docSnap) => docSnap.ref));
 
+  const feedbackSnap = await getDocs(getEventFeedbackCollection(db, eventId));
+  await deleteDocsInBatches(db, feedbackSnap.docs.map((docSnap) => docSnap.ref));
+
   await deleteDoc(getEventConfigRef(db, eventId));
   await deleteDoc(doc(db, 'events', eventId));
 }
@@ -286,6 +294,7 @@ async function ensureDefaultEventConfigExists(db: Firestore): Promise<void> {
       totalWaves: 30,
     },
     accessPasscode: '54321Blastoff!',
+    feedbackEnabled: false,
     branding: {
       title: DEFAULT_EVENT_NAME,
       emojiLeft: '',
@@ -353,7 +362,9 @@ interface FirebaseConfigData {
   };
   alertSettings?: WaveStore['alertSettings'];
   accessPasscode?: string;
+  passcodeProtectionEnabled?: boolean;
   eventClockEnabled?: boolean;
+  feedbackEnabled?: boolean;
   branding?: EventBranding;
 }
 
@@ -391,7 +402,9 @@ interface WaveStore {
   eventStartTime: string; // Format: "HH:mm" (24-hour)
   totalWaves: number;
   accessPasscode: string; // Passcode for protecting pages
+  passcodeProtectionEnabled: boolean;
   eventClockEnabled: boolean;
+  feedbackEnabled: boolean;
   // Alert settings are hardcoded - always enabled with beep sound and flash visual
   alertSettings: {
     workRestTransitions: boolean;
@@ -431,7 +444,11 @@ interface WaveStore {
   setWorkoutTimerConfig: (workSeconds: number, restSeconds: number) => Promise<void>;
   setEventConfig: (startDate: string, startTime: string, totalWaves: number) => Promise<void>;
   setAccessPasscode: (passcode: string) => Promise<void>;
+  setPasscodeProtectionEnabled: (enabled: boolean) => Promise<void>;
   setEventClockEnabled: (enabled: boolean) => Promise<void>;
+  setFeedbackEnabled: (enabled: boolean) => Promise<void>;
+  submitFeedback: (rating: number, message: string) => Promise<void>;
+  loadFeedbackEntries: (eventId?: string) => Promise<FeedbackEntry[]>;
   createEvent: (name: string) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
   setActiveEvent: (eventId: string) => Promise<void>;
@@ -457,6 +474,16 @@ const createInitialWaveData = (events: string[]): Record<string, string> =>
     acc[e] = '';
     return acc;
   }, {} as Record<string, string>);
+
+function normalizeFeedbackEntry(eventId: string, id: string, data: Partial<FeedbackEntry>): FeedbackEntry {
+  return {
+    id,
+    eventId,
+    rating: Math.min(5, Math.max(1, Number(data.rating) || 1)),
+    message: typeof data.message === 'string' ? data.message : '',
+    createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
+  };
+}
 
 /** Load all participants from a wave's Firestore subcollection. */
 async function loadWaveParticipants(waveRef: DocumentReference): Promise<Participant[]> {
@@ -488,7 +515,9 @@ export const useWaveStore = create<WaveStore>()(
       eventStartTime: '08:00',
       totalWaves: 30,
       accessPasscode: '54321Blastoff!', // Default passcode
+      passcodeProtectionEnabled: process.env.NEXT_PUBLIC_ENABLE_PASSCODE_PROTECTION === 'true',
       eventClockEnabled: false,
+      feedbackEnabled: false,
       // Alert settings are hardcoded - always enabled with beep sound and flash visual
       alertSettings: {
         workRestTransitions: true,
@@ -825,6 +854,21 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
 
+      setPasscodeProtectionEnabled: async (enabled) => {
+        set({ passcodeProtectionEnabled: enabled });
+
+        try {
+          const { db } = getFirebase();
+          const configRef = getGlobalSettingsRef(db);
+          await setDoc(configRef, {
+            passcodeProtectionEnabled: enabled,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        } catch (error) {
+          console.error('❌ Failed to save passcode protection setting to Firebase:', error);
+        }
+      },
+
       setEventClockEnabled: async (enabled) => {
         set({ eventClockEnabled: enabled });
 
@@ -837,6 +881,52 @@ export const useWaveStore = create<WaveStore>()(
           }, { merge: true });
         } catch (error) {
           console.error('❌ Failed to save event clock setting to Firebase:', error);
+        }
+      },
+
+      setFeedbackEnabled: async (enabled) => {
+        set({ feedbackEnabled: enabled });
+
+        try {
+          const { db } = getFirebase();
+          const configRef = getEventConfigRef(db, get().activeEventId);
+          await setDoc(configRef, {
+            feedbackEnabled: enabled,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        } catch (error) {
+          console.error('❌ Failed to save feedback setting to Firebase:', error);
+        }
+      },
+
+      submitFeedback: async (rating, message) => {
+        const trimmedMessage = message.trim();
+        if (!trimmedMessage) return;
+
+        const eventId = get().activeEventId;
+        const { db } = getFirebase();
+        const feedbackRef = doc(getEventFeedbackCollection(db, eventId));
+        const createdAt = new Date().toISOString();
+
+        await setDoc(feedbackRef, {
+          rating: Math.min(5, Math.max(1, Math.round(rating))),
+          message: trimmedMessage,
+          createdAt,
+          eventId,
+          updatedAt: createdAt,
+        }, { merge: true });
+      },
+
+      loadFeedbackEntries: async (eventId = get().activeEventId) => {
+        try {
+          const { db } = getFirebase();
+          const feedbackSnap = await getDocs(getEventFeedbackCollection(db, eventId));
+          return feedbackSnap.docs
+            .map((docSnap) => normalizeFeedbackEntry(eventId, docSnap.id, docSnap.data() as Partial<FeedbackEntry>))
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        } catch (error) {
+          console.error('❌ Failed to load feedback entries:', error);
+          return [];
         }
       },
 
@@ -987,6 +1077,7 @@ export const useWaveStore = create<WaveStore>()(
           waves: {},
           currentWaveId: null,
           isDataLoaded: false,
+          feedbackEnabled: false,
           eventClockEnabled: false,
         });
 
@@ -1274,6 +1365,11 @@ export const useWaveStore = create<WaveStore>()(
             if (typeof data.eventClockEnabled === 'boolean') {
               set({ eventClockEnabled: data.eventClockEnabled });
             }
+            if (typeof data.feedbackEnabled === 'boolean') {
+              set({ feedbackEnabled: data.feedbackEnabled });
+            } else {
+              set({ feedbackEnabled: false });
+            }
             // Always fully overwrite eventBranding with Firestore data + defaults
             const b = (data.branding || {}) as Partial<EventBranding>;
             const theme = b.theme || DEFAULT_BRANDING.theme;
@@ -1306,10 +1402,14 @@ export const useWaveStore = create<WaveStore>()(
             if (typeof sharedData.accessPasscode === 'string') {
               set({ accessPasscode: sharedData.accessPasscode });
             }
+            if (typeof sharedData.passcodeProtectionEnabled === 'boolean') {
+              set({ passcodeProtectionEnabled: sharedData.passcodeProtectionEnabled });
+            }
           } else if (eventPasscode) {
             // One-time migration path: promote existing event-scoped passcode to global setting.
             await setDoc(sharedRef, {
               accessPasscode: eventPasscode,
+              passcodeProtectionEnabled: get().passcodeProtectionEnabled,
               updatedAt: new Date().toISOString(),
             }, { merge: true });
             set({ accessPasscode: eventPasscode });
@@ -1838,11 +1938,17 @@ export const useWaveStore = create<WaveStore>()(
           if (typeof state.eventClockEnabled !== 'boolean') {
             state.eventClockEnabled = false;
           }
+          if (typeof state.feedbackEnabled !== 'boolean') {
+            state.feedbackEnabled = false;
+          }
           if (!state.eventNotes) {
             state.eventNotes = '';
           }
           if (!state.accessPasscode) {
             state.accessPasscode = '54321Blastoff!';
+          }
+          if (typeof state.passcodeProtectionEnabled !== 'boolean') {
+            state.passcodeProtectionEnabled = process.env.NEXT_PUBLIC_ENABLE_PASSCODE_PROTECTION === 'true';
           }
           if (!state.alertSettings) {
             state.alertSettings = {

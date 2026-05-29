@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-const isPasscodeProtectionEnabled = process.env.NEXT_PUBLIC_ENABLE_PASSCODE_PROTECTION === 'true';
+import { useWaveStore } from '@/store/waveStore';
 
 interface PasscodeProtectionProps {
   children: React.ReactNode;
@@ -10,13 +9,14 @@ interface PasscodeProtectionProps {
 }
 
 export default function PasscodeProtection({ children, requiredPasscode }: PasscodeProtectionProps) {
+  const { passcodeProtectionEnabled, themeColors } = useWaveStore();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passcode, setPasscode] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!isPasscodeProtectionEnabled) {
+    if (!passcodeProtectionEnabled) {
       setIsAuthenticated(true);
       setIsLoading(false);
       return;
@@ -28,7 +28,7 @@ export default function PasscodeProtection({ children, requiredPasscode }: Passc
       setIsAuthenticated(true);
     }
     setIsLoading(false);
-  }, []);
+  }, [passcodeProtectionEnabled]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +47,7 @@ export default function PasscodeProtection({ children, requiredPasscode }: Passc
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderBottomColor: themeColors.accent }}></div>
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
@@ -71,7 +71,8 @@ export default function PasscodeProtection({ children, requiredPasscode }: Passc
                 value={passcode}
                 onChange={(e) => setPasscode(e.target.value)}
                 placeholder="Enter passcode"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent"
+                style={{ boxShadow: 'none' }}
                 autoFocus
               />
             </div>
@@ -84,7 +85,8 @@ export default function PasscodeProtection({ children, requiredPasscode }: Passc
             
             <button
               type="submit"
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200"
+              className="w-full text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200"
+              style={{ backgroundColor: themeColors.accent }}
             >
               Submit
             </button>
@@ -93,7 +95,8 @@ export default function PasscodeProtection({ children, requiredPasscode }: Passc
           <div className="mt-6 text-center">
             <a 
               href="/leaderboard" 
-              className="text-orange-600 hover:text-orange-700 text-sm font-medium"
+              className="text-sm font-medium"
+              style={{ color: themeColors.accent }}
             >
               View Public Leaderboard
             </a>

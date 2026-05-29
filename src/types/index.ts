@@ -12,6 +12,14 @@ export interface Wave {
   startTime: string;
 }
 
+export interface FeedbackEntry {
+  id: string;
+  rating: number;
+  message: string;
+  createdAt: string;
+  eventId: string;
+}
+
 export interface WaveStore {
   waves: Record<string, Wave>;
   currentWaveId: string | null;

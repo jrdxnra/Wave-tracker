@@ -22,11 +22,15 @@ export default function Leaderboard() {
   const [mounted, setMounted] = useState(clientHasMounted);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
-  const { waves, customEvents, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, eventBranding, clearCacheAndReload, loadAll } = useWaveStore();
+  const { waves, customEvents, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, eventBranding, clearCacheAndReload, loadAll, feedbackEnabled, submitFeedback, themeColors } = useWaveStore();
   const [exerciseLeaderboards, setExerciseLeaderboards] = useState<ExerciseLeaderboard[]>([]);
   const [totalLeaderboard, setTotalLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [expandedLeaderboard, setExpandedLeaderboard] = useState<string | null>(null);
   const [showAllLeaderboards, setShowAllLeaderboards] = useState<Set<string>>(new Set());
+  const [feedbackRating, setFeedbackRating] = useState<number>(5);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState('');
 
   useEffect(() => {
     markClientMounted();
@@ -255,6 +259,29 @@ export default function Leaderboard() {
     );
   };
 
+  const handleFeedbackSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const trimmedMessage = feedbackMessage.trim();
+    if (!trimmedMessage) {
+      setFeedbackStatus('Please enter feedback before submitting.');
+      return;
+    }
+
+    setIsSubmittingFeedback(true);
+    try {
+      await submitFeedback(feedbackRating, trimmedMessage);
+      setFeedbackMessage('');
+      setFeedbackRating(5);
+      setFeedbackStatus('Thanks. Your feedback was saved.');
+    } catch (error) {
+      console.error('❌ Failed to submit leaderboard feedback:', error);
+      setFeedbackStatus('Feedback could not be saved. Please try again.');
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
   return (
     <div className="bg-gray-50 text-gray-900 font-sans">
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -332,6 +359,65 @@ export default function Leaderboard() {
           window.location.reload();
         }}
       />
+
+      {feedbackEnabled && (
+        <div className="fixed bottom-24 right-4 z-40 w-[calc(100%-1rem)] max-w-sm sm:right-6 sm:w-96">
+          <form
+            onSubmit={handleFeedbackSubmit}
+            className="rounded-2xl border border-black/5 bg-white/95 p-4 shadow-2xl backdrop-blur"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">Feedback</h2>
+                <p className="text-xs text-gray-500">Rate this event and leave a note.</p>
+              </div>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setFeedbackRating(star)}
+                    className="text-xl leading-none transition-transform hover:scale-110"
+                    aria-label={`Rate ${star} star${star === 1 ? '' : 's'}`}
+                    style={{ color: star <= feedbackRating ? themeColors.accent : '#d1d5db' }}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <textarea
+              value={feedbackMessage}
+              onChange={(e) => {
+                setFeedbackMessage(e.target.value);
+                if (feedbackStatus) {
+                  setFeedbackStatus('');
+                }
+              }}
+              rows={4}
+              maxLength={600}
+              placeholder="What worked well, what felt off, or what should change next time?"
+              className="mb-3 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2"
+              style={{ borderColor: '#e5e7eb' }}
+            />
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs text-gray-500">
+                {feedbackStatus || `${feedbackMessage.trim().length}/600`}
+              </div>
+              <button
+                type="submit"
+                disabled={isSubmittingFeedback || !feedbackMessage.trim()}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ backgroundColor: themeColors.accent }}
+              >
+                {isSubmittingFeedback ? 'Sending...' : 'Send Feedback'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

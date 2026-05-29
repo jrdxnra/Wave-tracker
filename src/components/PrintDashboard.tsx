@@ -19,7 +19,9 @@ interface PrintDashboardProps {
 }
 
 export default function PrintDashboard({ wave }: PrintDashboardProps) {
-  const { customEvents, eventNotes, workMinutes, restMinutes, activeEventId, eventBranding } = useWaveStore();
+  const { customEvents, eventNotes, workMinutes, restMinutes, activeEventId, eventBranding, themeColors } = useWaveStore();
+  const leftEmoji = eventBranding.emojiLeft?.trim() || '';
+  const rightEmoji = eventBranding.emojiRight?.trim() || '';
 
   const handlePrint = async () => {
     const doSave = window.confirm(`Save changes for "${wave.name}" to cloud storage before printing?`);
@@ -108,14 +110,14 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
               text-align: center;
               margin-bottom: 20px;
               padding: 20px;
-              background: linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fbbf24 100%);
+              background: linear-gradient(135deg, ${themeColors.start} 0%, ${themeColors.mid} 50%, ${themeColors.end} 100%);
               border-radius: 12px;
               color: white;
               position: relative;
               overflow: hidden;
             }
             .header:before {
-              content: '💪';
+              content: '${leftEmoji}';
               position: absolute;
               top: 10px;
               left: 20px;
@@ -123,7 +125,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
               opacity: 0.7;
             }
             .header:after {
-              content: '${eventBranding.emojiRight}';
+              content: '${rightEmoji}';
               position: absolute;
               top: 10px;
               right: 20px;
@@ -364,7 +366,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
         <body>
           <div class="header">
             <div class="title">${eventBranding.title} Wave Tracker</div>
-            <div class="wave-name">🏃‍♂️ ${wave.name}</div>
+            <div class="wave-name">${wave.name}</div>
             ${wave.startTime ? `<div class="start-time">Start Time: ${wave.startTime}</div>` : ''}
           </div>
 
@@ -475,7 +477,8 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
   return (
     <button
       onClick={handlePrint}
-      className="btn-secondary text-white font-bold py-2 px-4 rounded-md transition duration-300"
+      className="text-white font-bold py-2 px-4 rounded-md transition duration-300"
+      style={{ backgroundColor: themeColors.accent, color: '#fff' }}
     >
       <span className="hidden lg:inline">Print List</span>
       <span className="lg:hidden">Print</span>
