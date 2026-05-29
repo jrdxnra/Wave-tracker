@@ -21,6 +21,7 @@ interface WaveQuickViewCardProps {
 export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
   const { deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, updateParticipantLeaderboardStatus, themeColors } = useWaveStore();
   const accent = themeColors.accent;
+  const accentHover = themeColors.accentHover;
   const [newName, setNewName] = useState('');
   const [timeHM, setTimeHM] = useState<string>('');
   const [isEditingName, setIsEditingName] = useState(false);
@@ -107,7 +108,14 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
 
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200" style={{ borderLeft: `6px solid ${accent}` }}>
+    <div
+      className="bg-white p-6 rounded-lg shadow-lg border border-gray-200"
+      style={{
+        borderLeft: `6px solid ${accent}`,
+        ['--wave-accent' as string]: accent,
+        ['--wave-accent-hover' as string]: accentHover,
+      }}
+    >
       <div className="flex justify-between items-start mb-4">
         {isEditingName ? (
           <input
@@ -116,12 +124,12 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
             onChange={(e) => setEditingName(e.target.value)}
             onBlur={handleNameSave}
             onKeyDown={handleNameKeyPress}
-            className="text-xl font-semibold text-gray-900 bg-transparent border-b-2 border-orange-500 focus:outline-none focus:border-orange-600"
+            className="text-xl font-semibold text-gray-900 bg-transparent border-b-2 border-[var(--wave-accent)] focus:outline-none focus:border-[var(--wave-accent-hover)]"
             autoFocus
           />
         ) : (
           <h3 
-            className="text-xl font-semibold text-gray-900 cursor-pointer hover:text-orange-600 transition-colors"
+            className="text-xl font-semibold text-gray-900 cursor-pointer transition-colors hover:text-[var(--wave-accent-hover)]"
             onClick={handleNameEdit}
             title="Click to edit wave name"
           >
@@ -196,7 +204,7 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
               console.log('🔍 WaveCard: Saving to Firebase:', stored);
               updateWave(wave.id, { startTime: stored });
             }}
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--wave-accent)] focus:border-[var(--wave-accent)]"
           />
         </div>
       </div>
@@ -244,7 +252,8 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
                       console.error('Failed to update leaderboard status:', error);
                     }
                   }}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                  className="h-4 w-4 border-gray-300 rounded cursor-pointer focus:ring-[var(--wave-accent)]"
+                  style={{ accentColor: accent }}
                 />
                 <label 
                   htmlFor={`leaderboard-${wave.id}-${participant.id}`}
@@ -265,7 +274,7 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--wave-accent)] focus:border-[var(--wave-accent)]"
         />
         <button
           onClick={handleAddParticipant}
