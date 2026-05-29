@@ -594,7 +594,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               onChange={(e) => setNewEvent(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddEvent()}
               placeholder="Type movement name and press Enter"
-              className="w-full flex-1 h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              className="w-full sm:flex-1 h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
             />
             <button
               onClick={handleAddEvent}
@@ -663,7 +663,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 </div>
                 <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2">
                   {movementTimingModeLocal === 'individual' && (
-                    <>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-xs font-medium text-gray-500">W</span>
                       <input
                         type="number"
                         min={0}
@@ -678,9 +679,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                             },
                           }));
                         }}
-                        className="w-16 h-9 px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                        className="w-14 h-9 px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
                         aria-label={`Work minutes for ${movementName}`}
                       />
+                      <span className="text-xs font-medium text-gray-500">R</span>
                       <input
                         type="number"
                         min={0}
@@ -695,10 +697,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                             },
                           }));
                         }}
-                        className="w-16 h-9 px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                        className="w-14 h-9 px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
                         aria-label={`Rest minutes for ${movementName}`}
                       />
-                    </>
+                    </div>
                   )}
                   <button
                     onClick={() => handleMoveUp(index)}
@@ -890,7 +892,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   </button>
                 </div>
                 {movementTimingModeLocal === 'global' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Work (min)</label>
                       <input
