@@ -99,6 +99,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [openEmojiPicker, setOpenEmojiPicker] = useState<'left' | 'right' | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
+  const [isSwitchingEvent, setIsSwitchingEvent] = useState(false);
   const [isAddButtonHover, setIsAddButtonHover] = useState(false);
   const [isEventSelectFocused, setIsEventSelectFocused] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
@@ -150,6 +151,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setBrandEmojiLeft(eventBranding.emojiLeft);
     setBrandEmojiRight(eventBranding.emojiRight);
     const defaultGradient = getDefaultGradient(eventBranding.theme);
+    setGradientStart(eventBranding.customGradient?.start || defaultGradient.start);
+    setGradientMid(eventBranding.customGradient?.mid || defaultGradient.mid);
+    setGradientEnd(eventBranding.customGradient?.end || defaultGradient.end);
     if (isCreatingNewEvent) {
       setBrandTitle('');
       setBrandEmojiLeft('');
@@ -163,6 +167,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   }, [isOpen, activeEventId, eventBranding, movementTimingMode, isCreatingNewEvent]);
 
   const handleSave = async () => {
+    if (isSwitchingEvent) return;
     setIsSaving(true);
     try {
       if (isCreatingNewEvent) {
@@ -1009,14 +1014,20 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                     const nextEventId = e.target.value;
                     setSelectedEventId(nextEventId);
                     if (nextEventId === CREATE_NEW_EVENT_OPTION) {
+                      setIsSwitchingEvent(false);
                       setActiveTab('event');
                       return;
                     }
                     if (nextEventId === activeEventId) return;
 
-                    await setActiveEvent(nextEventId);
-                    if (pathname !== '/') {
-                      router.push('/');
+                    setIsSwitchingEvent(true);
+                    try {
+                      await setActiveEvent(nextEventId);
+                      if (pathname !== '/') {
+                        router.push('/');
+                      }
+                    } finally {
+                      setIsSwitchingEvent(false);
                     }
                   }}
                   onFocus={() => setIsEventSelectFocused(true)}
@@ -1123,7 +1134,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   console.error('❌ Error calling handleSave:', error);
                 }
               }}
-              disabled={isSaving || !brandTitle.trim()}
+              disabled={isSaving || isSwitchingEvent || !brandTitle.trim()}
               className="flex-1 sm:flex-none px-4 py-2 sm:px-6 sm:py-3 text-white border-2 rounded-lg transition-all active:scale-95 font-semibold"
               style={{
                 backgroundColor: eventBranding?.customGradient?.mid || eventBranding?.customColor || '#ea580c',

@@ -1023,16 +1023,6 @@ export const useWaveStore = create<WaveStore>()(
             isDataLoaded: false,
             lastFirebaseSync: null,
             activeWaves: new Set<string>(),
-            eventClockEnabled: false,
-            eventBranding: {
-              title: '',
-              emojiLeft: '',
-              emojiRight: '',
-              theme: 'orange',
-              customColor: undefined,
-              customGradient: undefined,
-            },
-            eventNotes: '',
           });
           await get().loadAll();
           return;
@@ -1059,16 +1049,6 @@ export const useWaveStore = create<WaveStore>()(
           isDataLoaded: false,
           lastFirebaseSync: null,
           activeWaves: new Set<string>(),
-          eventClockEnabled: false,
-          eventBranding: {
-            title: '',
-            emojiLeft: '',
-            emojiRight: '',
-            theme: 'orange',
-            customColor: undefined,
-            customGradient: undefined,
-          },
-          eventNotes: '',
         });
 
         await get().loadAll();
