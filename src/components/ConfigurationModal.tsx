@@ -149,28 +149,18 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setBrandTitle(eventBranding.title);
     setBrandEmojiLeft(eventBranding.emojiLeft);
     setBrandEmojiRight(eventBranding.emojiRight);
-    const fallbackGradient = getDefaultGradient(eventBranding.theme);
-    setGradientStart(eventBranding.customGradient?.start || fallbackGradient.start);
-    setGradientMid(eventBranding.customGradient?.mid || fallbackGradient.mid);
-    setGradientEnd(eventBranding.customGradient?.end || fallbackGradient.end);
-    setNewEventName('');
-    setNewEventMovementTimingMode(movementTimingMode);
-    setOpenEmojiPicker(null);
-  }, [isOpen, activeEventId, eventBranding, movementTimingMode]);
-
-  useEffect(() => {
-    if (!isCreatingNewEvent) return;
-
     const defaultGradient = getDefaultGradient(eventBranding.theme);
-    setBrandTitle('');
-    setBrandEmojiLeft('');
-    setBrandEmojiRight('');
-    setGradientStart(defaultGradient.start);
-    setGradientMid(defaultGradient.mid);
-    setGradientEnd(defaultGradient.end);
-    setNewEventName('');
-    setNewEventMovementTimingMode('global');
-  }, [isCreatingNewEvent, eventBranding.theme]);
+    if (isCreatingNewEvent) {
+      setBrandTitle('');
+      setBrandEmojiLeft('');
+      setBrandEmojiRight('');
+      setGradientStart(defaultGradient.start);
+      setGradientMid(defaultGradient.mid);
+      setGradientEnd(defaultGradient.end);
+      setNewEventName('');
+      setNewEventMovementTimingMode('global');
+    }
+  }, [isOpen, activeEventId, eventBranding, movementTimingMode, isCreatingNewEvent]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -218,7 +208,6 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         }
 
         await setAccessPasscode(passcode.trim());
-
         onClose();
         return;
       }
@@ -579,7 +568,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         </div>
 
         {/* Add New Movement */}
-        <div className="mb-4">
+        <div key={selectedEventId} className="mb-4 w-full">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-lg font-medium text-gray-900">Add New Movement</h3>
             {renderInfoTip(
@@ -587,15 +576,17 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               'Add New Movement tips'
             )}
           </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="text"
-              value={newEvent}
-              onChange={(e) => setNewEvent(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddEvent()}
-              placeholder="Type movement name and press Enter"
-              className="w-full sm:flex-1 h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-            />
+          <div className="grid w-full grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-stretch gap-2">
+            <div className="w-full min-w-0">
+              <input
+                type="text"
+                value={newEvent}
+                onChange={(e) => setNewEvent(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddEvent()}
+                placeholder="Type movement name and press Enter"
+                className="block w-full min-w-0 h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              />
+            </div>
             <button
               onClick={handleAddEvent}
               disabled={!newEvent.trim() || events.includes(newEvent.trim())}
@@ -646,7 +637,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 onDragStart={(e) => handleDragStart(e, index)}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, index)}
-                className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-move"
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-move items-center"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-xs font-semibold text-gray-500 w-6 text-right">{index + 1}.</span>
@@ -661,7 +652,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                     aria-label={`Movement name ${index + 1}`}
                   />
                 </div>
-                <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2">
+                <div className="flex flex-nowrap items-center justify-end gap-2 shrink-0">
                   {movementTimingModeLocal === 'individual' && (
                     <div className="flex items-center gap-1 shrink-0">
                       <span className="text-xs font-medium text-gray-500">W</span>
@@ -679,7 +670,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                             },
                           }));
                         }}
-                        className="w-14 h-9 px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                        className="w-12 sm:w-14 h-9 px-1 sm:px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
                         aria-label={`Work minutes for ${movementName}`}
                       />
                       <span className="text-xs font-medium text-gray-500">R</span>
@@ -697,7 +688,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                             },
                           }));
                         }}
-                        className="w-14 h-9 px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                        className="w-12 sm:w-14 h-9 px-1 sm:px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
                         aria-label={`Rest minutes for ${movementName}`}
                       />
                     </div>
@@ -859,7 +850,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           <div className="grid grid-cols-1 gap-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Event Title *</label>
+                <h3 className="text-lg font-medium text-gray-900 mb-1">Event Title *</h3>
                 <input
                   type="text"
                   value={brandTitle}
