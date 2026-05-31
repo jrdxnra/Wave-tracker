@@ -11,13 +11,6 @@ declare global {
     __INSPECT_ENABLED?: boolean;
   }
 }
-'use client';
-
-declare global {
-  interface Window {
-    __INSPECT_ENABLED?: boolean;
-  }
-}
 
 import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
