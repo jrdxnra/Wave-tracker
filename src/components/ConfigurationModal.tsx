@@ -20,7 +20,6 @@ declare global {
     __INSPECT_ENABLED?: boolean;
   }
 }
-'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
