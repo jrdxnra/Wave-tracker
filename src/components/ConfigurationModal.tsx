@@ -11,23 +11,6 @@ declare global {
     __INSPECT_ENABLED?: boolean;
   }
 }
-
-import { useState, useEffect, useRef } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import { useWaveStore } from '@/store/waveStore';
-import PasscodeProtection from '@/components/PasscodeProtection';
-
-'use client';
-
-// For hidden inspect toggle
-declare global {
-  interface Window {
-    __INSPECT_ENABLED?: boolean;
-  }
-}
-
-import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { useWaveStore } from '@/store/waveStore';
