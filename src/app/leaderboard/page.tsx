@@ -291,7 +291,12 @@ export default function Leaderboard() {
             <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
             <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
             <div className="pt-8 sm:pt-4">
-              <h1 className="text-2xl sm:text-4xl header-title mb-2">{eventBranding.emojiLeft} {eventBranding.title} Leaderboard {eventBranding.emojiRight}</h1>
+              <h1 className="text-xl sm:text-4xl header-title mb-2 w-full flex-nowrap flex items-center font-bold overflow-hidden justify-center gap-0.5 sm:gap-2" style={{lineHeight: 1}}>
+                <span className="text-base sm:text-2xl shrink-0 px-0.5">{eventBranding.emojiLeft}</span>
+                <span className="hidden sm:inline truncate flex-shrink px-1">{eventBranding.title} </span>
+                <span className="truncate flex-shrink px-1">Leaderboard</span>
+                <span className="text-base sm:text-2xl shrink-0 px-0.5">{eventBranding.emojiRight}</span>
+              </h1>
               <p className="text-white/90">Top performers across all waves</p>
             </div>
           </div>
@@ -313,19 +318,30 @@ export default function Leaderboard() {
         <main>
           {/* Total Reps Leaderboard (always expanded, not collapsible) */}
           <div id="leaderboard-card-total" className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-semibold text-gray-900 flex items-center">
-                <span className="text-3xl mr-3">🥇</span>
-                Total Reps - All Participants
-              </h2>
-              <div className="flex items-center gap-2">
+            <div className="flex flex-row items-center justify-between mb-6 gap-x-2 flex-nowrap w-full">
+              <div className="flex items-center gap-x-2 flex-nowrap">
+                <span className="text-2xl mr-1">🥇</span>
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center whitespace-nowrap px-0 flex-shrink-0">
+                  Total Reps - All
+                </h2>
+              </div>
+              {/* Top-N selector - always inline with title */}
+              <div className="flex flex-row flex-nowrap items-center gap-x-1 ml-2">
                 {[10, 20, 50, 100].map(n => (
                   <button
                     key={n}
                     onClick={() => setTotalTopN(n)}
-                    className={`px-3 py-1 rounded-full border font-semibold text-sm transition-colors duration-150 ${totalTopN === n ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-orange-50'}`}
+                    className={`
+                      flex items-center justify-center rounded-full border font-semibold transition-colors duration-150
+                      text-xs
+                      w-6 h-6 sm:w-8 sm:h-8
+                      p-0
+                      ${totalTopN === n ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-orange-50'}
+                    `}
+                    style={{ minWidth: '1.5rem', minHeight: '1.5rem' }}
+                    aria-label={`Show top ${n}`}
                   >
-                    Top {n}
+                    {n}
                   </button>
                 ))}
               </div>

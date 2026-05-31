@@ -194,14 +194,11 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
                         const nextEventId = e.target.value;
                         setSelectedEventId(nextEventId);
                         if (nextEventId === activeEventId) return;
-
-                        // Close and navigate immediately to keep switching smooth,
-                        // then perform the event switch without blocking the current page.
+                        await setActiveEvent(nextEventId); // Wait for state to update
                         onClose();
                         if (pathname !== '/') {
                           router.push('/');
                         }
-                        void setActiveEvent(nextEventId);
                       }}
                       className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
                     >

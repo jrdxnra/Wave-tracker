@@ -1584,42 +1584,40 @@ export const useWaveStore = create<WaveStore>()(
         }
         
         // Only sync if there are globally active waves
-        if (globalActiveWaves.size === 0) {
-          console.log('⏰ Skipping sync - no globally active waves to monitor');
+        // Filter out waves that do not exist in the current event
+        let validWaveIds = new Set<string>();
+        try {
+          const wavesSnap = await getDocs(getEventWavesCollection(db, get().activeEventId));
+          validWaveIds = new Set(wavesSnap.docs.map(doc => doc.id));
+        } catch (e) {
+          console.error('❌ Failed to load waves for filtering active waves:', e);
+        }
+        const filteredActiveWaves = Array.from(globalActiveWaves).filter(waveId => validWaveIds.has(waveId));
+        if (filteredActiveWaves.length === 0) {
+          console.log('⏰ Skipping sync - no valid globally active waves to monitor for this event');
           set({ lastFirebaseSync: now });
           return;
         }
-        
-        console.log(`🔄 Smart sync: checking ${globalActiveWaves.size} globally active waves for multi-user updates...`);
-        
+        console.log(`🔄 Smart sync: checking ${filteredActiveWaves.length} valid globally active waves for multi-user updates...`);
         try {
           let hasChanges = false;
           const updatedWaves = { ...state.waves };
-          
-          // Only sync waves that are globally active (being edited by other users)
-          for (const waveId of globalActiveWaves) {
+          for (const waveId of filteredActiveWaves) {
             try {
               const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
               const waveSnap = await getDoc(waveRef);
-              
               if (!waveSnap.exists()) {
                 console.log(`⚠️ Wave ${waveId} no longer exists in Firebase`);
                 continue;
               }
-              
               const w = waveSnap.data() as FirebaseWaveData;
-              
-              // Load participants from subcollection
               const participants = await loadWaveParticipants(waveRef);
-              
               const firebaseWave = {
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
                 participants,
               } as Wave;
-              
-              // Check if this wave has changed
               const localWave = state.waves[waveId];
               if (!localWave || JSON.stringify(localWave) !== JSON.stringify(firebaseWave)) {
                 updatedWaves[waveId] = firebaseWave;
@@ -1630,7 +1628,6 @@ export const useWaveStore = create<WaveStore>()(
               console.error(`❌ Error syncing wave ${waveId}:`, waveError);
             }
           }
-          
           if (hasChanges) {
             set({ 
               waves: updatedWaves,
@@ -1641,11 +1638,11 @@ export const useWaveStore = create<WaveStore>()(
             set({ lastFirebaseSync: now });
             console.log('✅ Smart sync complete - no changes in active waves');
           }
-          
         } catch (error) {
           console.error('❌ Smart sync failed:', error);
           set({ lastFirebaseSync: now }); // Still update timestamp to prevent retry loops
         }
+        return;
       },
 
       // Smart sync with Firebase (no cooldown - for immediate updates)

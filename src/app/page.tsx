@@ -91,7 +91,12 @@ export default function Page() {
               <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
               <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
               <div className="pt-8 sm:pt-4">
-                <h1 className="text-2xl sm:text-4xl header-title mb-2">{eventBranding.emojiLeft} {eventBranding.title} Wave Tracker {eventBranding.emojiRight}</h1>
+                <h1 className="text-2xl sm:text-4xl header-title mb-2 w-full flex-nowrap flex items-center font-bold overflow-hidden justify-center gap-1 sm:gap-2" style={{lineHeight: 1}}>
+                        <span className="text-xl sm:text-2xl shrink-0">{eventBranding.emojiLeft}</span>
+                        <span className="hidden sm:inline truncate flex-shrink px-1">{eventBranding.title} </span>
+                        <span className="truncate flex-shrink px-1">Wave Tracker</span>
+                        <span className="text-xl sm:text-2xl shrink-0">{eventBranding.emojiRight}</span>
+                </h1>
                 <p className="text-white/90">Manage wave based events with ease</p>
               </div>
             </div>

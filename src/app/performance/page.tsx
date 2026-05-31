@@ -31,7 +31,7 @@ export default function PerformancePage() {
     markClientMounted();
     setMounted(true);
     (async () => {
-      await loadAll();
+      await clearCacheAndReload(); // Only reload on mount or event switch
       if (!isCancelled) {
         setIsInitialLoadComplete(true);
       }
@@ -39,7 +39,7 @@ export default function PerformancePage() {
     
     // Handle pull-to-refresh on mobile
     const handleRefresh = async () => {
-      await loadAll();
+      await clearCacheAndReload();
     };
     
     // Listen for visibility change (happens on pull-to-refresh)
@@ -62,7 +62,7 @@ export default function PerformancePage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pageshow', handlePageShow);
     };
-  }, [loadAll, isDataLoaded]);
+  }, [clearCacheAndReload, activeEventId]);
 
   // No background sync - only sync on page load and after saves
 
@@ -100,8 +100,8 @@ export default function PerformancePage() {
     };
   }, [activeWaveId, markWaveAsActive, markWaveAsInactive]);
 
-  // Show loading spinner if not mounted or data not loaded
-  if (!mounted || !isInitialLoadComplete) {
+  // Show loading spinner if not mounted or data not loaded (match leaderboard)
+  if (!mounted || !isDataLoaded) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -112,7 +112,7 @@ export default function PerformancePage() {
     );
   }
 
-  // Show empty state if no waves for this event
+  // Show empty state if no waves for this event (match leaderboard)
   if (!waves || Object.keys(waves).length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -133,7 +133,12 @@ export default function PerformancePage() {
               <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
               <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
               <div className="pt-8 sm:pt-4">
-                <h1 className="text-2xl sm:text-4xl header-title mb-2">{eventBranding.emojiLeft} {eventBranding.title} Performance {eventBranding.emojiRight}</h1>
+                <h1 className="text-2xl sm:text-4xl header-title mb-2 w-full flex-nowrap flex items-center font-bold overflow-hidden justify-center gap-1 sm:gap-2" style={{lineHeight: 1}}>
+                  <span className="text-xl sm:text-2xl shrink-0">{eventBranding.emojiLeft}</span>
+                  <span className="hidden sm:inline truncate flex-shrink px-1">{eventBranding.title} </span>
+                  <span className="truncate flex-shrink px-1">Performance</span>
+                  <span className="text-xl sm:text-2xl shrink-0">{eventBranding.emojiRight}</span>
+                </h1>
                 <p className="text-white/90">Record workout performance data for all waves</p>
               </div>
             </div>
@@ -159,7 +164,7 @@ export default function PerformancePage() {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Wave</h3>
                   
                   {/* Wave Grid */}
-                  <div className="grid grid-cols-7 gap-2">
+                    <div className="grid grid-cols-7 gap-0.5">
                     {waveIds.map((id) => (
                       <button
                         key={id}
