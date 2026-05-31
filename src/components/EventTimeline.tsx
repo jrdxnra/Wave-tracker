@@ -118,7 +118,20 @@ export default function EventTimeline({
         </div>
       </div>
       
-      <div className="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+
+      <div
+        className="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden cursor-pointer"
+        onClick={() => {
+          // Hidden inspect toggle: toggles window.__INSPECT_ENABLED and triggers debugger
+          window.__INSPECT_ENABLED = !window.__INSPECT_ENABLED;
+          if (window.__INSPECT_ENABLED) {
+            // Open DevTools if not already open
+            // eslint-disable-next-line no-debugger
+            debugger;
+          }
+        }}
+        title=""
+      >
         <div
           className="absolute top-0 left-0 h-full transition-all duration-1000 ease-linear"
           style={{
