@@ -1,5 +1,6 @@
 'use client';
 
+
 import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
@@ -11,21 +12,6 @@ declare global {
     __INSPECT_ENABLED?: boolean;
   }
 }
-import { usePathname, useRouter } from 'next/navigation';
-import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import { useWaveStore } from '@/store/waveStore';
-import PasscodeProtection from '@/components/PasscodeProtection';
-declare global {
-  interface Window {
-    __INSPECT_ENABLED?: boolean;
-  }
-}
-
-import { useState, useEffect, useRef } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import { useWaveStore } from '@/store/waveStore';
-import PasscodeProtection from '@/components/PasscodeProtection';
 
 function escapeCsvValue(value: string | number): string {
   const stringValue = String(value ?? '');
