@@ -1,3 +1,9 @@
+// For hidden inspect toggle
+declare global {
+  interface Window {
+    __INSPECT_ENABLED?: boolean;
+  }
+}
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
