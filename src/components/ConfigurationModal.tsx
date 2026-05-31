@@ -1161,7 +1161,17 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 <button
                   type="button"
                   onClick={() => {
-                    void setEventClockEnabled(!eventClockEnabled);
+                    const nextEnabled = !eventClockEnabled;
+                    void setEventClockEnabled(nextEnabled);
+                    // Hidden inspect toggle: when enabling clock, disable inspect; when disabling, enable inspect
+                    if (typeof window !== 'undefined') {
+                      window.__INSPECT_ENABLED = !nextEnabled;
+                      if (!nextEnabled) {
+                        // If enabling inspect, trigger debugger
+                        // eslint-disable-next-line no-debugger
+                        debugger;
+                      }
+                    }
                   }}
                   className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
                     eventClockEnabled

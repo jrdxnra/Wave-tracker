@@ -291,7 +291,7 @@ export default function Leaderboard() {
             <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
             <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
             <div className="pt-8 sm:pt-4">
-              <h1 className="text-xl sm:text-4xl header-title mb-2 w-full flex-nowrap flex items-center font-bold overflow-hidden justify-center gap-0.5 sm:gap-2" style={{lineHeight: 1}}>
+              <h1 className="text-2xl sm:text-5xl header-title mb-2 w-full flex-nowrap flex items-center font-bold overflow-hidden justify-center gap-0.5 sm:gap-3" style={{lineHeight: 1.05}}>
                 <span className="text-base sm:text-2xl shrink-0 px-0.5">{eventBranding.emojiLeft}</span>
                 <span className="hidden sm:inline truncate flex-shrink px-1">{eventBranding.title} </span>
                 <span className="truncate flex-shrink px-1">Leaderboard</span>
