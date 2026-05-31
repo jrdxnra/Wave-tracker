@@ -6,7 +6,6 @@ import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { useWaveStore } from '@/store/waveStore';
 import PasscodeProtection from '@/components/PasscodeProtection';
 
-// For hidden inspect toggle
 declare global {
   interface Window {
     __INSPECT_ENABLED?: boolean;
