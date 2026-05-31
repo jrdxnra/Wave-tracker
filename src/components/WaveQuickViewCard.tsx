@@ -15,6 +15,7 @@ interface WaveQuickViewCardProps {
       includeInLeaderboard?: boolean;
     }>;
     startTime: string;
+    coach?: string;
   };
 }
 
@@ -155,57 +156,55 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
         </div>
       </div>
 
+
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Start Time:</label>
-        <div className="flex gap-2 items-center">
-          <input
-            type="time"
-            value={timeHM}
-            onChange={(e) => {
-              const v = e.target.value;
-              console.log('🔍 WaveCard: Time picker changed to:', v);
-              setTimeHM(v);
-              
-              // Only process if we have a valid time format
-              if (!v || !v.includes(':')) return;
-              
-              // Convert 24h to 12h format with AM/PM
-              const timeParts = v.split(':');
-              const hours = parseInt(timeParts[0], 10);
-              const minutes = parseInt(timeParts[1], 10);
-              
-              console.log('🔍 WaveCard: Parsed 24h time - hours:', hours, 'minutes:', minutes);
-              
-              // Validate the parsed values
-              if (isNaN(hours) || isNaN(minutes)) return;
-              
-              let displayHours = hours;
-              let period: 'AM' | 'PM' = 'AM';
-              
-              if (hours === 0) {
-                displayHours = 12;
-                period = 'AM';
-                console.log('🔍 WaveCard: Midnight case - 12 AM');
-              } else if (hours < 12) {
-                displayHours = hours;
-                period = 'AM';
-                console.log('🔍 WaveCard: Morning case -', displayHours, 'AM');
-              } else if (hours === 12) {
-                displayHours = 12;
-                period = 'PM';
-                console.log('🔍 WaveCard: Noon case - 12 PM');
-              } else {
-                displayHours = hours - 12;
-                period = 'PM';
-                console.log('🔍 WaveCard: Afternoon case -', displayHours, 'PM');
-              }
-              
-              const stored = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
-              console.log('🔍 WaveCard: Saving to Firebase:', stored);
-              updateWave(wave.id, { startTime: stored });
-            }}
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--wave-accent)] focus:border-[var(--wave-accent)]"
-          />
+        <div className="flex items-center gap-8">
+          {/* Start Time Block (left) */}
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Start Time:</label>
+            <input
+              type="time"
+              value={timeHM}
+              onChange={(e) => {
+                const v = e.target.value;
+                setTimeHM(v);
+                if (!v || !v.includes(':')) return;
+                const timeParts = v.split(':');
+                const hours = parseInt(timeParts[0], 10);
+                const minutes = parseInt(timeParts[1], 10);
+                if (isNaN(hours) || isNaN(minutes)) return;
+                let displayHours = hours;
+                let period: 'AM' | 'PM' = 'AM';
+                if (hours === 0) {
+                  displayHours = 12;
+                  period = 'AM';
+                } else if (hours < 12) {
+                  displayHours = hours;
+                  period = 'AM';
+                } else if (hours === 12) {
+                  displayHours = 12;
+                  period = 'PM';
+                } else {
+                  displayHours = hours - 12;
+                  period = 'PM';
+                }
+                const stored = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+                updateWave(wave.id, { startTime: stored });
+              }}
+              className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--wave-accent)] focus:border-[var(--wave-accent)]"
+            />
+          </div>
+          {/* Coach Block (right) */}
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Coach:</label>
+            <input
+              type="text"
+              value={wave.coach || ''}
+              onChange={e => updateWave(wave.id, { coach: e.target.value })}
+              placeholder="Enter coach's name"
+              className="p-2 border border-gray-300 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[var(--wave-accent)] focus:border-[var(--wave-accent)]"
+            />
+          </div>
         </div>
       </div>
 

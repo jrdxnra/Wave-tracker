@@ -10,6 +10,7 @@ export interface Wave {
   name: string;
   participants: Participant[];
   startTime: string;
+  coach?: string; // Name of the coach assigned to this wave
 }
 
 export interface FeedbackEntry {

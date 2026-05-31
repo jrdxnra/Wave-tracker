@@ -209,23 +209,26 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
   useEffect(() => {
     if (!isOpen) return;
-    setSelectedEventId(activeEventId);
-    setBrandTitle(eventBranding.title);
-    setBrandEmojiLeft(eventBranding.emojiLeft);
-    setBrandEmojiRight(eventBranding.emojiRight);
-    const defaultGradient = getDefaultGradient(eventBranding.theme);
-    setGradientStart(eventBranding.customGradient?.start || defaultGradient.start);
-    setGradientMid(eventBranding.customGradient?.mid || defaultGradient.mid);
-    setGradientEnd(eventBranding.customGradient?.end || defaultGradient.end);
     if (isCreatingNewEvent) {
+      // Always reset all fields for a new event
       setBrandTitle('');
       setBrandEmojiLeft('');
       setBrandEmojiRight('');
+      const defaultGradient = getDefaultGradient('orange');
       setGradientStart(defaultGradient.start);
       setGradientMid(defaultGradient.mid);
       setGradientEnd(defaultGradient.end);
       setNewEventName('');
       setNewEventMovementTimingMode('global');
+    } else {
+      setSelectedEventId(activeEventId);
+      setBrandTitle(eventBranding.title);
+      setBrandEmojiLeft(eventBranding.emojiLeft);
+      setBrandEmojiRight(eventBranding.emojiRight);
+      const defaultGradient = getDefaultGradient(eventBranding.theme);
+      setGradientStart(eventBranding.customGradient?.start || defaultGradient.start);
+      setGradientMid(eventBranding.customGradient?.mid || defaultGradient.mid);
+      setGradientEnd(eventBranding.customGradient?.end || defaultGradient.end);
     }
   }, [isOpen, activeEventId, eventBranding, movementTimingMode, isCreatingNewEvent]);
 
@@ -250,7 +253,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               {
                 workMinutes: normalizeMinutes(work),
                 restMinutes: normalizeMinutes(rest),
-              },
+              }
             ])
           ) as Record<string, { workMinutes: number; restMinutes: number }>;
 
@@ -264,15 +267,25 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
           await updateEventBranding({
             title: createdEventName,
-            emojiLeft: brandEmojiLeft.trim(),
-            emojiRight: brandEmojiRight.trim(),
+            emojiLeft: '',
+            emojiRight: '',
             customGradient: {
-              start: normalizeHexColor(gradientStart, getDefaultGradient(eventBranding.theme).start),
-              mid: normalizeHexColor(gradientMid, getDefaultGradient(eventBranding.theme).mid),
-              end: normalizeHexColor(gradientEnd, getDefaultGradient(eventBranding.theme).end),
+              start: getDefaultGradient('orange').start,
+              mid: getDefaultGradient('orange').mid,
+              end: getDefaultGradient('orange').end,
             },
           });
           setSelectedEventId(createdEventId);
+          // Reset all fields to defaults for the new event
+          setBrandTitle('');
+          setBrandEmojiLeft('');
+          setBrandEmojiRight('');
+          const defaultGradient = getDefaultGradient('orange');
+          setGradientStart(defaultGradient.start);
+          setGradientMid(defaultGradient.mid);
+          setGradientEnd(defaultGradient.end);
+          setNewEventName('');
+          setNewEventMovementTimingMode('global');
         }
 
         await setAccessPasscode(passcode.trim());
@@ -1138,12 +1151,12 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               </div>
               <div className="flex flex-col items-start gap-2">
                 <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-medium text-gray-900">Event Clock Settings</h3>
-                    {renderInfoTip(
-                      'Wave Start Interval: Time between each wave starting (e.g., Wave 1 at 8:00, Wave 2 at 8:10).\nWork + Rest: Duration of each movement station. Movement times on performance/print sheets are calculated using Work + Rest.',
-                      'Event Clock tips',
-                      'right'
-                    )}
+                  <h3 className="text-lg font-medium text-gray-900">Event Clock/Timeline</h3>
+                  {renderInfoTip(
+                    'Wave Start Interval: Time between each wave starting (e.g., Wave 1 at 8:00, Wave 2 at 8:10).\nWork + Rest: Duration of each movement station. Movement times on performance/print sheets are calculated using Work + Rest.',
+                    'Event Clock tips',
+                    'right'
+                  )}
                 </div>
                 <button
                   type="button"
@@ -1156,7 +1169,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                       : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
                   }`}
                 >
-                  {eventClockEnabled ? 'Disable Clock' : 'Enable Clock'}
+                  {eventClockEnabled ? 'Disable' : 'Enable'}
                 </button>
               </div>
             </div>

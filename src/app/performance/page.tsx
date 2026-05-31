@@ -100,12 +100,25 @@ export default function PerformancePage() {
     };
   }, [activeWaveId, markWaveAsActive, markWaveAsInactive]);
 
+  // Show loading spinner if not mounted or data not loaded
   if (!mounted || !isInitialLoadComplete) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading Performance Tracker...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show empty state if no waves for this event
+  if (!waves || Object.keys(waves).length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">😶‍🌫️</div>
+          <p className="text-gray-600">No waves found for this event.<br/>Start by adding a wave or check your event selection.</p>
         </div>
       </div>
     );

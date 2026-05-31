@@ -1,3 +1,8 @@
+// TODO: Future improvement
+// - Implement a global Client/User system with unique IDs to track attendance and performance across events.
+// - Each participant in a wave should reference a global client ID.
+// - This will allow tracking attendance, performance, and improvements across events.
+// - For now, leaderboard and participant data are event-scoped and safe from cross-event leakage.
 "use client";
 
 import { create } from 'zustand';
@@ -549,6 +554,7 @@ export const useWaveStore = create<WaveStore>()(
           name: name || `Wave ${nextWaveNumber}`,
           participants: [],
           startTime: '',
+          coach: '',
         };
         set((s) => ({ waves: { ...s.waves, [id]: wave }, currentWaveId: id }));
         return id;
@@ -586,7 +592,22 @@ export const useWaveStore = create<WaveStore>()(
       updateWave: (waveId, updates) => {
         const wave = get().waves[waveId];
         if (!wave) return;
-        set((s) => ({ waves: { ...s.waves, [waveId]: { ...wave, ...updates } } }));
+        const updatedWave = { ...wave, ...updates };
+        set((s) => ({ waves: { ...s.waves, [waveId]: updatedWave } }));
+        // Save to Firebase
+        try {
+          const { db } = getFirebase();
+          const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
+          setDoc(waveRef, {
+            id: updatedWave.id,
+            name: updatedWave.name,
+            startTime: updatedWave.startTime,
+            coach: updatedWave.coach || '',
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+        } catch (error) {
+          secureLogger.error('❌ Failed to update wave in Firebase:', error);
+        }
       },
 
       addParticipant: async (waveId, name) => {
@@ -627,6 +648,7 @@ export const useWaveStore = create<WaveStore>()(
             id: waveId,
             name: updatedWave.name,
             startTime: updatedWave.startTime,
+            coach: updatedWave.coach || '',
             updatedAt: serverTimestamp(),
           }, { merge: true });
           
@@ -676,6 +698,7 @@ export const useWaveStore = create<WaveStore>()(
             id: waveId,
             name: updatedWave.name,
             startTime: updatedWave.startTime,
+            coach: updatedWave.coach || '',
             updatedAt: serverTimestamp(),
           }, { merge: true });
           
@@ -1132,6 +1155,9 @@ export const useWaveStore = create<WaveStore>()(
           updatedAt: new Date().toISOString(),
         }, { merge: true });
 
+        // Immediately clear movements so no old ones show during load
+        set({ customEvents: [] });
+
         // Aggressively reset all event-specific state to true empty/defaults
         set({
           activeEventId: eventId,
@@ -1140,6 +1166,22 @@ export const useWaveStore = create<WaveStore>()(
           isDataLoaded: false,
           lastFirebaseSync: null,
           activeWaves: new Set<string>(),
+          // Reset other event-specific state if needed
+          eventNotes: '',
+          customEvents: WAVE_EVENTS,
+          intervalMinutes: 5,
+          workMinutes: 3,
+          restMinutes: 2,
+          movementTimingMode: 'global',
+          movementIntervals: {},
+          maxParticipants: 10,
+          workoutTimerWorkSeconds: 60,
+          workoutTimerRestSeconds: 30,
+          eventStartDate: new Date().toISOString().split('T')[0],
+          eventStartTime: '08:00',
+          totalWaves: 30,
+          eventBranding: DEFAULT_BRANDING,
+          themeColors: getThemeColors(DEFAULT_BRANDING),
         });
 
         await get().loadAll();
