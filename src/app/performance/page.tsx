@@ -9,9 +9,10 @@ import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
 import ConfigurationModal from '@/components/ConfigurationModal';
 import EventClock from '@/components/EventClock';
 import PasscodeProtection from '@/components/PasscodeProtection';
+import EventPageHeader from '@/components/EventPageHeader';
 
 export default function PerformancePage() {
-  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, eventBranding, activeEventId, eventClockEnabled, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, loadAll, setUserActivity, isDataLoaded } = useWaveStore();
+  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, eventBranding, activeEventId, eventClockEnabled, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, setUserActivity, isDataLoaded } = useWaveStore();
 
   const [mounted, setMounted] = useState(clientHasMounted);
   // Pre-initialize as complete when store already has data (instant page transitions)
@@ -30,39 +31,22 @@ export default function PerformancePage() {
     let isCancelled = false;
     markClientMounted();
     setMounted(true);
+    setIsInitialLoadComplete(false);
     (async () => {
-      await clearCacheAndReload(); // Only reload on mount or event switch
+      await clearCacheAndReload();
       if (!isCancelled) {
         setIsInitialLoadComplete(true);
       }
     })();
-    
-    // Handle pull-to-refresh on mobile
-    const handleRefresh = async () => {
-      await clearCacheAndReload();
-    };
-    
-    // Listen for visibility change (happens on pull-to-refresh)
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        handleRefresh();
-      }
-    };
-    
-    // Listen for page show event (happens on pull-to-refresh)
-    const handlePageShow = () => {
-      handleRefresh();
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pageshow', handlePageShow);
-    
+
     return () => {
       isCancelled = true;
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pageshow', handlePageShow);
     };
   }, [clearCacheAndReload, activeEventId]);
+
+  useEffect(() => {
+    setSelectedWaveId(null);
+  }, [activeEventId]);
 
   // No background sync - only sync on page load and after saves
 
@@ -100,8 +84,8 @@ export default function PerformancePage() {
     };
   }, [activeWaveId, markWaveAsActive, markWaveAsInactive]);
 
-  // Show loading spinner if not mounted or data not loaded (match leaderboard)
-  if (!mounted || !isDataLoaded) {
+  // Show loading spinner if not mounted or data not loaded
+  if (!mounted || !isInitialLoadComplete) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -112,37 +96,15 @@ export default function PerformancePage() {
     );
   }
 
-  // Show empty state if no waves for this event (match leaderboard)
-  if (!waves || Object.keys(waves).length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-4">😶‍🌫️</div>
-          <p className="text-gray-600">No waves found for this event.<br/>Start by adding a wave or check your event selection.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <PasscodeProtection requiredPasscode={accessPasscode}>
       <div className="bg-gray-50 text-gray-900 font-sans">
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-          <header className="text-center mb-8 relative">
-            <div className="header-gradient p-8">
-              <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
-              <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
-              <div className="pt-8 sm:pt-4">
-                <h1 className="text-2xl sm:text-4xl header-title mb-2 w-full flex-nowrap flex items-center font-bold overflow-hidden justify-center gap-1 sm:gap-2" style={{lineHeight: 1}}>
-                  <span className="text-xl sm:text-2xl shrink-0">{eventBranding.emojiLeft}</span>
-                  <span className="hidden sm:inline truncate flex-shrink px-1">{eventBranding.title} </span>
-                  <span className="truncate flex-shrink px-1">Performance</span>
-                  <span className="text-xl sm:text-2xl shrink-0">{eventBranding.emojiRight}</span>
-                </h1>
-                <p className="text-white/90">Record workout performance data for all waves</p>
-              </div>
-            </div>
-          </header>
+          <EventPageHeader
+            eventBranding={eventBranding}
+            pageLabel="Performance"
+            subtitle="Record workout performance data for all waves"
+          />
 
         <main>
           {waveIds.length === 0 ? (
@@ -164,7 +126,7 @@ export default function PerformancePage() {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Wave</h3>
                   
                   {/* Wave Grid */}
-                    <div className="grid grid-cols-7 gap-0.5">
+                  <div className="grid grid-cols-7 gap-2">
                     {waveIds.map((id) => (
                       <button
                         key={id}

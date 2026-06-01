@@ -12,6 +12,7 @@ import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
 import ConfigurationModal from '@/components/ConfigurationModal';
 import EventTimeline from '@/components/EventTimeline';
 import EventClock from '@/components/EventClock';
+import EventPageHeader from '@/components/EventPageHeader';
 
 interface LeaderboardEntry {
   name: string;
@@ -133,18 +134,6 @@ export default function Leaderboard() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading Leaderboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show empty state if no waves for this event
-  if (!waves || Object.keys(waves).length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-4">😶‍🌫️</div>
-          <p className="text-gray-600">No waves found for this event.<br/>Start by adding a wave or check your event selection.</p>
         </div>
       </div>
     );
@@ -286,21 +275,11 @@ export default function Leaderboard() {
   return (
     <div className="bg-gray-50 text-gray-900 font-sans">
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-        <header className="text-center mb-8 relative">
-          <div className="header-gradient p-8">
-            <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
-            <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
-            <div className="pt-8 sm:pt-4">
-              <h1 className="text-2xl sm:text-5xl header-title mb-2 w-full flex-nowrap flex items-center font-bold overflow-hidden justify-center gap-0.5 sm:gap-3" style={{lineHeight: 1.05}}>
-                <span className="text-base sm:text-2xl shrink-0 px-0.5">{eventBranding.emojiLeft}</span>
-                <span className="hidden sm:inline truncate flex-shrink px-1">{eventBranding.title} </span>
-                <span className="truncate flex-shrink px-1">Leaderboard</span>
-                <span className="text-base sm:text-2xl shrink-0 px-0.5">{eventBranding.emojiRight}</span>
-              </h1>
-              <p className="text-white/90">Top performers across all waves</p>
-            </div>
-          </div>
-        </header>
+        <EventPageHeader
+          eventBranding={eventBranding}
+          pageLabel="Leaderboard"
+          subtitle="Top performers across all waves"
+        />
 
         {/* Event Timeline (game day only) */}
         {eventClockEnabled && (
@@ -318,32 +297,26 @@ export default function Leaderboard() {
         <main>
           {/* Total Reps Leaderboard (always expanded, not collapsible) */}
           <div id="leaderboard-card-total" className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 mb-8">
-            <div className="flex flex-row items-center justify-between mb-6 gap-x-2 flex-nowrap w-full">
-              <div className="flex items-center gap-x-2 flex-nowrap">
-                <span className="text-2xl mr-1">🥇</span>
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center whitespace-nowrap px-0 flex-shrink-0">
-                  Total Reps - All
+            <div className="flex flex-row flex-nowrap items-center mb-6 gap-x-2 overflow-x-auto">
+              <div className="flex flex-row flex-nowrap items-center gap-x-2">
+                <span className="text-3xl mr-2">🥇</span>
+                <h2 className="text-2xl font-semibold text-gray-900 flex items-center whitespace-nowrap">
+                  Total Reps
                 </h2>
-              </div>
-              {/* Top-N selector - always inline with title */}
-              <div className="flex flex-row flex-nowrap items-center gap-x-1 ml-2">
-                {[10, 20, 50, 100].map(n => (
-                  <button
-                    key={n}
-                    onClick={() => setTotalTopN(n)}
-                    className={`
-                      flex items-center justify-center rounded-full border font-semibold transition-colors duration-150
-                      text-xs
-                      w-6 h-6 sm:w-8 sm:h-8
-                      p-0
-                      ${totalTopN === n ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-orange-50'}
-                    `}
-                    style={{ minWidth: '1.5rem', minHeight: '1.5rem' }}
-                    aria-label={`Show top ${n}`}
-                  >
-                    {n}
-                  </button>
-                ))}
+                {/* Top-N selector - fits inline with title on mobile */}
+                <div className="flex flex-row flex-nowrap items-center gap-x-1 ml-2">
+                  {[10, 20, 50, 100].map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setTotalTopN(n)}
+                      className={`w-7 h-7 flex items-center justify-center rounded-full border font-semibold text-xs transition-colors duration-150 ${totalTopN === n ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-orange-50'}`}
+                      style={{ minWidth: '1.75rem', minHeight: '1.75rem', padding: 0 }}
+                      aria-label={`Show top ${n}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             {renderLeaderboard(totalLeaderboard, true, 'total', false, totalTopN)}

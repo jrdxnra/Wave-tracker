@@ -894,10 +894,13 @@ export const useWaveStore = create<WaveStore>()(
 
       setEventClockEnabled: async (enabled) => {
         set({ eventClockEnabled: enabled });
+        if (typeof window !== 'undefined') {
+          window.__INSPECT_ENABLED = !enabled;
+        }
 
         try {
           const { db } = getFirebase();
-          const configRef = getEventConfigRef(db, get().activeEventId);
+          const configRef = getGlobalSettingsRef(db);
           await setDoc(configRef, {
             eventClockEnabled: enabled,
             updatedAt: new Date().toISOString(),
@@ -962,7 +965,6 @@ export const useWaveStore = create<WaveStore>()(
           if (!indexSnap.exists()) {
             const initialEvents: EventSummary[] = [{ id: DEFAULT_EVENT_ID, name: DEFAULT_EVENT_NAME }];
             await setDoc(indexRef, {
-              activeEventId: DEFAULT_EVENT_ID,
               events: initialEvents,
               updatedAt: new Date().toISOString(),
             }, { merge: true });
@@ -1035,13 +1037,13 @@ export const useWaveStore = create<WaveStore>()(
             events.unshift({ id: DEFAULT_EVENT_ID, name: DEFAULT_EVENT_NAME });
           }
 
-          const activeEventId = events.some((event) => event.id === data.activeEventId)
-            ? (data.activeEventId as string)
+          const preferredActiveEventId = get().activeEventId || DEFAULT_EVENT_ID;
+          const activeEventId = events.some((event) => event.id === preferredActiveEventId)
+            ? preferredActiveEventId
             : DEFAULT_EVENT_ID;
 
-          if (!hasDefaultEvent || activeEventId !== data.activeEventId || discoveredMissingEvents) {
+          if (!hasDefaultEvent || discoveredMissingEvents) {
             await setDoc(indexRef, {
-              activeEventId,
               events,
               updatedAt: new Date().toISOString(),
             }, { merge: true });
@@ -1079,7 +1081,6 @@ export const useWaveStore = create<WaveStore>()(
 
         await setDoc(getEventsIndexRef(db), {
           events,
-          activeEventId: candidate,
           updatedAt: new Date().toISOString(),
         }, { merge: true });
 
@@ -1124,7 +1125,6 @@ export const useWaveStore = create<WaveStore>()(
 
         await setDoc(getEventsIndexRef(db), {
           events: remainingEvents,
-          activeEventId: nextActiveEventId,
           updatedAt: new Date().toISOString(),
         }, { merge: true });
 
@@ -1148,12 +1148,6 @@ export const useWaveStore = create<WaveStore>()(
       setActiveEvent: async (eventId) => {
         const exists = get().eventsCatalog.some((e) => e.id === eventId);
         if (!exists) return;
-
-        const { db } = getFirebase();
-        await setDoc(getEventsIndexRef(db), {
-          activeEventId: eventId,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
 
         // Immediately clear movements so no old ones show during load
         set({ customEvents: [] });
@@ -1350,6 +1344,7 @@ export const useWaveStore = create<WaveStore>()(
           const cfgRef = getEventConfigRef(db, get().activeEventId);
           const cfgSnap = await getDoc(cfgRef);
           let eventPasscode: string | null = null;
+          let legacyEventClockEnabled: boolean | undefined;
           if (cfgSnap.exists()) {
             const data = cfgSnap.data() as FirebaseConfigData;
             secureLogger.log('📋 Loaded config from Firebase:', data);
@@ -1405,7 +1400,7 @@ export const useWaveStore = create<WaveStore>()(
               eventPasscode = data.accessPasscode;
             }
             if (typeof data.eventClockEnabled === 'boolean') {
-              set({ eventClockEnabled: data.eventClockEnabled });
+              legacyEventClockEnabled = data.eventClockEnabled;
             }
             if (typeof data.feedbackEnabled === 'boolean') {
               set({ feedbackEnabled: data.feedbackEnabled });
@@ -1447,14 +1442,41 @@ export const useWaveStore = create<WaveStore>()(
             if (typeof sharedData.passcodeProtectionEnabled === 'boolean') {
               set({ passcodeProtectionEnabled: sharedData.passcodeProtectionEnabled });
             }
+            if (typeof sharedData.eventClockEnabled === 'boolean') {
+              set({ eventClockEnabled: sharedData.eventClockEnabled });
+              if (typeof window !== 'undefined') {
+                window.__INSPECT_ENABLED = !sharedData.eventClockEnabled;
+              }
+            } else if (typeof legacyEventClockEnabled === 'boolean') {
+              set({ eventClockEnabled: legacyEventClockEnabled });
+              if (typeof window !== 'undefined') {
+                window.__INSPECT_ENABLED = !legacyEventClockEnabled;
+              }
+              await setDoc(sharedRef, {
+                eventClockEnabled: legacyEventClockEnabled,
+                updatedAt: new Date().toISOString(),
+              }, { merge: true });
+            }
           } else if (eventPasscode) {
             // One-time migration path: promote existing event-scoped passcode to global setting.
             await setDoc(sharedRef, {
               accessPasscode: eventPasscode,
               passcodeProtectionEnabled: get().passcodeProtectionEnabled,
+              eventClockEnabled: typeof legacyEventClockEnabled === 'boolean' ? legacyEventClockEnabled : get().eventClockEnabled,
               updatedAt: new Date().toISOString(),
             }, { merge: true });
             set({ accessPasscode: eventPasscode });
+            if (typeof legacyEventClockEnabled === 'boolean') {
+              set({ eventClockEnabled: legacyEventClockEnabled });
+              if (typeof window !== 'undefined') {
+                window.__INSPECT_ENABLED = !legacyEventClockEnabled;
+              }
+            }
+          } else if (typeof legacyEventClockEnabled === 'boolean') {
+            set({ eventClockEnabled: legacyEventClockEnabled });
+            if (typeof window !== 'undefined') {
+              window.__INSPECT_ENABLED = !legacyEventClockEnabled;
+            }
           }
         } catch (e) {
           secureLogger.error('Error loading config:', e);
@@ -1560,6 +1582,7 @@ export const useWaveStore = create<WaveStore>()(
       syncWithFirebase: async () => {
         const state = get();
         const now = Date.now();
+        const activeEventId = state.activeEventId;
         
         // Smart cooldown based on user activity
         const cooldown = state.isUserActive ? 1000 : 5000; // 1s if active, 5s if inactive
@@ -1575,49 +1598,64 @@ export const useWaveStore = create<WaveStore>()(
         // Load active waves from Firebase (global active status)
         let globalActiveWaves = new Set<string>();
         try {
-          const activeWavesCol = getEventActiveWavesCollection(db, get().activeEventId);
+          const activeWavesCol = getEventActiveWavesCollection(db, activeEventId);
           const activeWavesSnap = await getDocs(activeWavesCol);
-          globalActiveWaves = new Set(activeWavesSnap.docs.map(doc => doc.id));
+          if (get().activeEventId !== activeEventId) {
+            console.log('⏭️ Skipping sync - active event changed during fetch');
+            return;
+          }
+          globalActiveWaves = new Set(
+            activeWavesSnap.docs
+              .map((docSnap) => docSnap.id)
+              .filter((waveId) => typeof waveId === 'string' && waveId.length > 0)
+          );
           console.log(`🌐 Found ${globalActiveWaves.size} globally active waves:`, Array.from(globalActiveWaves));
         } catch (error) {
           console.error('❌ Failed to load active waves from Firebase:', error);
         }
         
         // Only sync if there are globally active waves
-        // Filter out waves that do not exist in the current event
-        let validWaveIds = new Set<string>();
-        try {
-          const wavesSnap = await getDocs(getEventWavesCollection(db, get().activeEventId));
-          validWaveIds = new Set(wavesSnap.docs.map(doc => doc.id));
-        } catch (e) {
-          console.error('❌ Failed to load waves for filtering active waves:', e);
-        }
-        const filteredActiveWaves = Array.from(globalActiveWaves).filter(waveId => validWaveIds.has(waveId));
-        if (filteredActiveWaves.length === 0) {
-          console.log('⏰ Skipping sync - no valid globally active waves to monitor for this event');
+        if (globalActiveWaves.size === 0) {
+          console.log('⏰ Skipping sync - no globally active waves to monitor');
           set({ lastFirebaseSync: now });
           return;
         }
-        console.log(`🔄 Smart sync: checking ${filteredActiveWaves.length} valid globally active waves for multi-user updates...`);
+        
+        console.log(`🔄 Smart sync: checking ${globalActiveWaves.size} globally active waves for multi-user updates...`);
+        
         try {
           let hasChanges = false;
           const updatedWaves = { ...state.waves };
-          for (const waveId of filteredActiveWaves) {
+          
+          // Only sync waves that are globally active (being edited by other users)
+          for (const waveId of globalActiveWaves) {
             try {
-              const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
+              if (get().activeEventId !== activeEventId) {
+                console.log('⏭️ Skipping wave sync - active event changed');
+                return;
+              }
+
+              const waveRef = doc(getEventWavesCollection(db, activeEventId), waveId);
               const waveSnap = await getDoc(waveRef);
+              
               if (!waveSnap.exists()) {
                 console.log(`⚠️ Wave ${waveId} no longer exists in Firebase`);
                 continue;
               }
+              
               const w = waveSnap.data() as FirebaseWaveData;
+              
+              // Load participants from subcollection
               const participants = await loadWaveParticipants(waveRef);
+              
               const firebaseWave = {
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
                 participants,
               } as Wave;
+              
+              // Check if this wave has changed
               const localWave = state.waves[waveId];
               if (!localWave || JSON.stringify(localWave) !== JSON.stringify(firebaseWave)) {
                 updatedWaves[waveId] = firebaseWave;
@@ -1628,6 +1666,7 @@ export const useWaveStore = create<WaveStore>()(
               console.error(`❌ Error syncing wave ${waveId}:`, waveError);
             }
           }
+          
           if (hasChanges) {
             set({ 
               waves: updatedWaves,
@@ -1638,17 +1677,18 @@ export const useWaveStore = create<WaveStore>()(
             set({ lastFirebaseSync: now });
             console.log('✅ Smart sync complete - no changes in active waves');
           }
+          
         } catch (error) {
           console.error('❌ Smart sync failed:', error);
           set({ lastFirebaseSync: now }); // Still update timestamp to prevent retry loops
         }
-        return;
       },
 
       // Smart sync with Firebase (no cooldown - for immediate updates)
       syncWithFirebaseNoCooldown: async () => {
         const state = get();
         const now = Date.now();
+        const activeEventId = state.activeEventId;
         
         console.log(`🔄 Smart sync (no cooldown): checking for globally active waves...`);
         const { db } = getFirebase();
@@ -1656,9 +1696,17 @@ export const useWaveStore = create<WaveStore>()(
         // Load active waves from Firebase (global active status)
         let globalActiveWaves = new Set<string>();
         try {
-          const activeWavesCol = getEventActiveWavesCollection(db, get().activeEventId);
+          const activeWavesCol = getEventActiveWavesCollection(db, activeEventId);
           const activeWavesSnap = await getDocs(activeWavesCol);
-          globalActiveWaves = new Set(activeWavesSnap.docs.map(doc => doc.id));
+          if (get().activeEventId !== activeEventId) {
+            console.log('⏭️ Skipping no-cooldown sync - active event changed during fetch');
+            return;
+          }
+          globalActiveWaves = new Set(
+            activeWavesSnap.docs
+              .map((docSnap) => docSnap.id)
+              .filter((waveId) => typeof waveId === 'string' && waveId.length > 0)
+          );
           console.log(`🌐 Found ${globalActiveWaves.size} globally active waves:`, Array.from(globalActiveWaves));
         } catch (error) {
           console.error('❌ Failed to load active waves from Firebase:', error);
@@ -1680,7 +1728,12 @@ export const useWaveStore = create<WaveStore>()(
           // Only sync waves that are globally active (being edited by other users)
           for (const waveId of globalActiveWaves) {
             try {
-              const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
+              if (get().activeEventId !== activeEventId) {
+                console.log('⏭️ Skipping wave sync - active event changed');
+                return;
+              }
+
+              const waveRef = doc(getEventWavesCollection(db, activeEventId), waveId);
               const waveSnap = await getDoc(waveRef);
               
               if (!waveSnap.exists()) {
@@ -1908,7 +1961,7 @@ export const useWaveStore = create<WaveStore>()(
     }),
     {
       name: 'exos-wave-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (s) => ({
         activeEventId: s.activeEventId,
         eventsCatalog: s.eventsCatalog,
@@ -1996,20 +2049,6 @@ export const useWaveStore = create<WaveStore>()(
               soundType: 'beep',
               visualEffect: 'flash'
             };
-          }
-          
-          // Initialize waves if empty or undefined
-          if (!state.waves || Object.keys(state.waves).length === 0) {
-            const id = `wave${Date.now()}`;
-            state.waves = {
-              [id]: {
-                id,
-                name: 'Wave 1',
-                participants: [],
-                startTime: '',
-              },
-            };
-            state.currentWaveId = id;
           }
           
           secureLogger.log('✅ Store rehydrated with defaults - will load fresh global config from Firebase');

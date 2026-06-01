@@ -8,6 +8,7 @@ import WaveQuickViewCard from '@/components/WaveQuickViewCard';
 import ConfigurationModal from '@/components/ConfigurationModal';
 import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
 import PasscodeProtection from '@/components/PasscodeProtection';
+import EventPageHeader from '@/components/EventPageHeader';
 import { getFirebase } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -86,21 +87,11 @@ export default function Page() {
     <PasscodeProtection requiredPasscode={accessPasscode}>
       <div className="bg-gray-50 text-gray-900 font-sans">
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-          <header className="text-center mb-8 relative">
-            <div className="header-gradient p-8">
-              <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
-              <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
-              <div className="pt-8 sm:pt-4">
-                <h1 className="text-2xl sm:text-4xl header-title mb-2 w-full flex-nowrap flex items-center font-bold overflow-hidden justify-center gap-1 sm:gap-2" style={{lineHeight: 1}}>
-                        <span className="text-xl sm:text-2xl shrink-0">{eventBranding.emojiLeft}</span>
-                        <span className="hidden sm:inline truncate flex-shrink px-1">{eventBranding.title} </span>
-                        <span className="truncate flex-shrink px-1">Wave Tracker</span>
-                        <span className="text-xl sm:text-2xl shrink-0">{eventBranding.emojiRight}</span>
-                </h1>
-                <p className="text-white/90">Manage wave based events with ease</p>
-              </div>
-            </div>
-          </header>
+          <EventPageHeader
+            eventBranding={eventBranding}
+            pageLabel="Wave Tracker"
+            subtitle="Manage wave based events with ease"
+          />
 
         {/* Total Participant Count Summary */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">

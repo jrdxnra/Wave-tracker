@@ -194,6 +194,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
                         const nextEventId = e.target.value;
                         setSelectedEventId(nextEventId);
                         if (nextEventId === activeEventId) return;
+
                         await setActiveEvent(nextEventId); // Wait for state to update
                         onClose();
                         if (pathname !== '/') {

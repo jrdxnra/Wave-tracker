@@ -1,17 +1,10 @@
 'use client';
 
-
 import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { useWaveStore } from '@/store/waveStore';
 import PasscodeProtection from '@/components/PasscodeProtection';
-
-declare global {
-  interface Window {
-    __INSPECT_ENABLED?: boolean;
-  }
-}
 
 function escapeCsvValue(value: string | number): string {
   const stringValue = String(value ?? '');
@@ -1170,12 +1163,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   onClick={() => {
                     const nextEnabled = !eventClockEnabled;
                     void setEventClockEnabled(nextEnabled);
-                    // Hidden inspect toggle: when enabling clock, disable inspect; when disabling, enable inspect
                     if (typeof window !== 'undefined') {
                       window.__INSPECT_ENABLED = !nextEnabled;
                       if (!nextEnabled) {
-                        // If enabling inspect, trigger debugger
-                        // eslint-disable-next-line no-debugger
+                        // Enable inspect mode immediately when clock/timeline is disabled.
                         debugger;
                       }
                     }
@@ -1279,9 +1270,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
             className="p-4 sm:p-6 pb-0 flex-shrink-0 bg-white"
             style={{ ['--accent-color' as string]: themeColors.accent }}
           >
-            <div className="flex flex-col gap-3 pb-0 sm:flex-row sm:items-center">
+            <div className="flex flex-row flex-nowrap items-center gap-x-2 pb-0">
               <h2 className="text-2xl font-semibold text-gray-900">Configuration</h2>
-              <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+              <div className="flex flex-row flex-nowrap gap-x-1 ml-2 w-full">
                 <select
                   value={selectedEventId}
                   onChange={async (e) => {
