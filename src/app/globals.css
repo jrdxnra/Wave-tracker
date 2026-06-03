@@ -132,27 +132,27 @@ body:before {
 }
 
 .btn-secondary { 
-  background: linear-gradient(135deg, var(--brand-mid) 0%, var(--brand-start) 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); /* blue gradient */
   color: white; 
   transition: all 0.3s ease;
   border: none;
 }
 .btn-secondary:hover { 
-  background: linear-gradient(135deg, var(--brand-start) 0%, var(--brand-accent-hover) 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgb(var(--brand-accent-hover-rgb) / 0.35);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
 }
 
 .btn-tertiary { 
-  background: linear-gradient(135deg, var(--brand-end) 0%, var(--brand-mid) 100%);
+  background: linear-gradient(135deg, #f97316 0%, #fbbf24 100%); /* lighter orange to yellow */
   color: white; 
   transition: all 0.3s ease;
   border: none;
 }
 .btn-tertiary:hover { 
-  background: linear-gradient(135deg, var(--brand-mid) 0%, var(--brand-start) 100%);
+  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%);
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgb(var(--brand-accent-rgb) / 0.3);
+  box-shadow: 0 8px 25px rgba(249, 115, 22, 0.4);
 }
 
 .btn-destructive { 
