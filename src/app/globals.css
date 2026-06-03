@@ -8,6 +8,8 @@
   --brand-end: #fbbf24;
   --brand-accent: #ea580c;
   --brand-accent-hover: #c2410c;
+  --brand-accent-rgb: 234 88 12;
+  --brand-accent-hover-rgb: 194 65 12;
 }
 
 /* Cosmic Orange-to-Yellow Ombre Theme */
@@ -113,7 +115,7 @@ body:before {
 .btn-primary:hover { 
   background: linear-gradient(135deg, var(--brand-accent-hover) 0%, var(--brand-start) 50%, var(--brand-end) 100%);
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(234, 88, 12, 0.4);
+  box-shadow: 0 8px 25px rgb(var(--brand-accent-rgb) / 0.4);
 }
 .btn-primary:before {
   content: '';
