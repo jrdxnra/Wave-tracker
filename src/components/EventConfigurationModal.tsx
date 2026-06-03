@@ -120,6 +120,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const saveEventId = useWaveStore.getState().activeEventId;
       await updateEventBranding({
         title: brandTitle.trim() || 'Event',
         emojiLeft: brandEmojiLeft.trim(),
@@ -129,7 +130,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
           mid: normalizeHexColor(gradientMid, getDefaultGradient(eventBranding.theme).mid),
           end: normalizeHexColor(gradientEnd, getDefaultGradient(eventBranding.theme).end),
         },
-      });
+      }, saveEventId);
       setIsDirty(false);
       onClose();
     } catch (error) {

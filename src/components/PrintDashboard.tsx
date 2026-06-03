@@ -1,8 +1,6 @@
 'use client';
 
 import { useWaveStore } from '@/store/waveStore';
-import { getFirebase } from '@/lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
 
 interface PrintDashboardProps {
   wave: {
@@ -19,31 +17,37 @@ interface PrintDashboardProps {
 }
 
 export default function PrintDashboard({ wave }: PrintDashboardProps) {
-  const { customEvents, eventNotes, workMinutes, restMinutes, activeEventId, eventBranding, themeColors } = useWaveStore();
+  const { customEvents, eventNotes, workMinutes, restMinutes, eventBranding, themeColors } = useWaveStore();
   const leftEmoji = eventBranding.emojiLeft?.trim() || '';
   const rightEmoji = eventBranding.emojiRight?.trim() || '';
 
-  const handlePrint = async () => {
-    const doSave = window.confirm(`Save changes for "${wave.name}" to cloud storage before printing?`);
-    if (doSave) {
-      try {
-        
-        // Save only this specific wave to Firebase
-        const { db } = getFirebase();
-        await setDoc(doc(db, 'events', activeEventId, 'waves', wave.id), {
-          name: wave.name,
-          startTime: wave.startTime,
-          participants: wave.participants
-        }, { merge: true });
-        
-      } catch (e: unknown) {
-        console.error('❌ Save failed:', e);
-        alert(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
-        return; // Don't proceed with print if save failed
-      }
-    }
+  const handlePrint = () => {
+    // Freeze all print data at click-time so output remains consistent.
+    const snapshot = {
+      title: eventBranding.title,
+      leftEmoji,
+      rightEmoji,
+      themeColors: { ...themeColors },
+      notes: eventNotes || '',
+      workMinutes,
+      restMinutes,
+      customEvents: [...customEvents],
+      wave: {
+        id: wave.id,
+        name: wave.name,
+        startTime: wave.startTime,
+        participants: wave.participants.map((participant) => ({
+          id: participant.id,
+          name: participant.name,
+          waveData: { ...(participant.waveData || {}) },
+        })),
+      },
+    };
+
+    const printWave = snapshot.wave;
+    const printEvents = snapshot.customEvents;
     // Compute dynamic Name column width based on the average of the longest names
-    const nameLengths = wave.participants
+    const nameLengths = printWave.participants
       .map(p => (p.name || '').length);
     const topN = nameLengths.sort((a, b) => b - a).slice(0, 5);
     const avgChars = topN.length ? topN.reduce((a, b) => a + b, 0) / topN.length : 16;
@@ -84,10 +88,10 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
       }
     };
 
-    const startDate = parseStart(wave.startTime) || new Date();
+    const startDate = parseStart(printWave.startTime) || new Date();
     // Movement times are every (work + rest) minutes, not wave start interval
-    const movementInterval = workMinutes + restMinutes;
-    const movementTimes = customEvents.map((_, idx) => {
+    const movementInterval = snapshot.workMinutes + snapshot.restMinutes;
+    const movementTimes = printEvents.map((_, idx) => {
       const t = new Date(startDate.getTime() + idx * movementInterval * 60000);
       return t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     });
@@ -97,7 +101,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${eventBranding.title} - ${wave.name}</title>
+          <title>${snapshot.title} - ${printWave.name}</title>
           <style>
             body { 
               margin: 0; 
@@ -110,14 +114,14 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
               text-align: center;
               margin-bottom: 20px;
               padding: 20px;
-              background: linear-gradient(135deg, ${themeColors.start} 0%, ${themeColors.mid} 50%, ${themeColors.end} 100%);
+              background: linear-gradient(135deg, ${snapshot.themeColors.start} 0%, ${snapshot.themeColors.mid} 50%, ${snapshot.themeColors.end} 100%);
               border-radius: 12px;
               color: white;
               position: relative;
               overflow: hidden;
             }
             .header:before {
-              content: '${leftEmoji}';
+              content: '${snapshot.leftEmoji}';
               position: absolute;
               top: 10px;
               left: 20px;
@@ -125,7 +129,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
               opacity: 0.7;
             }
             .header:after {
-              content: '${rightEmoji}';
+              content: '${snapshot.rightEmoji}';
               position: absolute;
               top: 10px;
               right: 20px;
@@ -365,9 +369,9 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
         </head>
         <body>
           <div class="header">
-            <div class="title">${eventBranding.title} Wave Tracker</div>
-            <div class="wave-name">${wave.name}</div>
-            ${wave.startTime ? `<div class="start-time">Start Time: ${wave.startTime}</div>` : ''}
+            <div class="title">${snapshot.title} Wave Tracker</div>
+            <div class="wave-name">${printWave.name}</div>
+            ${printWave.startTime ? `<div class="start-time">Start Time: ${printWave.startTime}</div>` : ''}
           </div>
 
           <table class="print-table">
@@ -376,14 +380,14 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
                 <th class="col-num"></th>
                 <th class="col-name" style="font-weight:600;text-transform:none;color:#1f2937;">
                   <div>Timing: every ${movementInterval} min</div>
-                  <div>Work ${workMinutes}/ Rest ${restMinutes}</div>
+                  <div>Work ${snapshot.workMinutes}/ Rest ${snapshot.restMinutes}</div>
                 </th>
                 ${movementTimes.map(t => `<th class="time-header">${t}</th>`).join('')}
               </tr>
               <tr>
                 <th class="col-num">#</th>
                 <th class="col-name">Name</th>
-                ${customEvents.map(event => {
+                ${printEvents.map(event => {
                   if (event.includes('-')) {
                     const [first, ...restParts] = event.split('-');
                     const second = restParts.join('-').trim();
@@ -394,12 +398,12 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
               </tr>
             </thead>
             <tbody>
-              ${wave.participants.slice(0, 15).map((participant, idx) => {
+              ${printWave.participants.slice(0, 15).map((participant, idx) => {
                 const miniHeader = (idx > 0 && idx % 5 === 0) ? `
                   <tr class=\"mini-header\">
                     <th class=\"col-num\">#</th>
                     <th class=\"col-name\">Name</th>
-                    ${customEvents.map(event => {
+                    ${printEvents.map(event => {
                       if (event.includes('-')) {
                         const [first, ...restParts] = event.split('-');
                         const second = restParts.join('-').trim();
@@ -419,7 +423,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
                         <div class=\"name\">${participant.name || ''}</div>
                       </div>
                     </td>
-                    ${customEvents.map(event => `<td class=\"value\">${(participant.waveData || {})[event] || ''}</td>`).join('')}
+                    ${printEvents.map(event => `<td class=\"value\">${(participant.waveData || {})[event] || ''}</td>`).join('')}
                   </tr>
                 `;
               }).join('')}
@@ -428,7 +432,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
 
           <div class="event-notes">
             <h3>Event Notes & Details:</h3>
-            <p>${eventNotes || ''}</p>
+            <p>${snapshot.notes}</p>
           </div>
         </body>
       </html>

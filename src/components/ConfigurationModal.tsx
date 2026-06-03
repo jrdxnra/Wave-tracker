@@ -262,19 +262,20 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
             normalizeMinutes(work),
             normalizeMinutes(rest),
             newEventMovementTimingMode,
-            newEventMovementTimingMode === 'individual' ? perMovementDefaults : {}
+            newEventMovementTimingMode === 'individual' ? perMovementDefaults : {},
+            createdEventId
           );
 
           await updateEventBranding({
             title: createdEventName,
-            emojiLeft: '',
-            emojiRight: '',
+            emojiLeft: brandEmojiLeft.trim(),
+            emojiRight: brandEmojiRight.trim(),
             customGradient: {
-              start: getDefaultGradient('orange').start,
-              mid: getDefaultGradient('orange').mid,
-              end: getDefaultGradient('orange').end,
+              start: normalizeHexColor(gradientStart, getDefaultGradient('orange').start),
+              mid: normalizeHexColor(gradientMid, getDefaultGradient('orange').mid),
+              end: normalizeHexColor(gradientEnd, getDefaultGradient('orange').end),
             },
-          });
+          }, createdEventId);
           setSelectedEventId(createdEventId);
           // Reset all fields to defaults for the new event
           setBrandTitle('');
@@ -290,7 +291,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
         await setAccessPasscode(passcode.trim());
         await setPasscodeProtectionEnabled(passcodeProtectionEnabledLocal);
-        await setFeedbackEnabled(feedbackEnabledLocal);
+        await setFeedbackEnabled(feedbackEnabledLocal, createdEventId);
         onClose();
         return;
       }
@@ -300,9 +301,16 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         return;
       }
 
+      if (selectedEventId !== activeEventId) {
+        alert('Wait for event switching to finish before saving.');
+        return;
+      }
+
+      const saveEventId = activeEventId;
+
       const eventsChanged = JSON.stringify(events) !== JSON.stringify(customEvents);
       if (eventsChanged) {
-        await updateWaveEvents(events);
+        await updateWaveEvents(events, saveEventId);
       }
 
       await setTimingConfig(
@@ -310,14 +318,15 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         normalizeMinutes(work),
         normalizeMinutes(rest),
         movementTimingModeLocal,
-        normalizeMovementIntervals(movementIntervalsLocal, work, rest)
+        normalizeMovementIntervals(movementIntervalsLocal, work, rest),
+        saveEventId
       );
-      await setMaxParticipants(maxParticipantsLocal);
-      await setWorkoutTimerConfig(Math.max(1, Math.round(timerWorkSeconds)), Math.max(1, Math.round(timerRestSeconds)));
-      await setEventConfig(startDate, startTime, Math.max(1, Math.round(waves)));
+      await setMaxParticipants(maxParticipantsLocal, saveEventId);
+      await setWorkoutTimerConfig(Math.max(1, Math.round(timerWorkSeconds)), Math.max(1, Math.round(timerRestSeconds)), saveEventId);
+      await setEventConfig(startDate, startTime, Math.max(1, Math.round(waves)), saveEventId);
       await setAccessPasscode(passcode);
       await setPasscodeProtectionEnabled(passcodeProtectionEnabledLocal);
-      await setFeedbackEnabled(feedbackEnabledLocal);
+      await setFeedbackEnabled(feedbackEnabledLocal, saveEventId);
 
       await updateEventBranding({
         title: brandTitle.trim(),
@@ -328,7 +337,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           mid: normalizeHexColor(gradientMid, getDefaultGradient(eventBranding.theme).mid),
           end: normalizeHexColor(gradientEnd, getDefaultGradient(eventBranding.theme).end),
         },
-      });
+      }, saveEventId);
 
       onClose();
     } catch (error) {
@@ -506,11 +515,12 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
   const handleFeedbackToggle = async () => {
     const nextEnabled = !feedbackEnabledLocal;
+    const targetEventId = useWaveStore.getState().activeEventId;
     setFeedbackEnabledLocal(nextEnabled);
     setIsUpdatingFeedbackToggle(true);
 
     try {
-      await setFeedbackEnabled(nextEnabled);
+      await setFeedbackEnabled(nextEnabled, targetEventId);
     } catch (error) {
       console.error('❌ Failed to update feedback visibility:', error);
       setFeedbackEnabledLocal(!nextEnabled);
@@ -1275,6 +1285,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               <div className="flex flex-row flex-nowrap gap-x-1 ml-2 w-full">
                 <select
                   value={selectedEventId}
+                  disabled={isSaving || isSwitchingEvent || isHydratingConfig}
                   onChange={async (e) => {
                     const nextEventId = e.target.value;
                     setSelectedEventId(nextEventId);

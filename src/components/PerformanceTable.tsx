@@ -2,8 +2,6 @@
 
 import { useRef, useState } from 'react';
 import { useWaveStore } from '@/store/waveStore';
-import { getFirebase } from '@/lib/firebase';
-import { doc, setDoc, collection } from 'firebase/firestore';
 
 interface PerformanceTableProps {
   wave: {
@@ -26,7 +24,7 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
     workMinutes,
     restMinutes,
     updateParticipantData,
-    syncWithFirebase,
+    saveWavePerformance,
   } = useWaveStore();
 
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -124,45 +122,7 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
       // Small delay to ensure state updates are applied
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Get the current wave state after applying updates
-      const currentWave = useWaveStore.getState().waves[wave.id];
-      
-      // Save the wave to Firebase
-      const { db } = getFirebase();
-      const waveRef = doc(db, 'events', activeEventId, 'waves', wave.id);
-      
-      // Save wave document (without participants array)
-      const waveData = {
-        name: currentWave.name,
-        startTime: currentWave.startTime,
-        updatedAt: new Date().toISOString()
-      };
-      
-      await setDoc(waveRef, waveData, { merge: true });
-      
-      // Save each participant to subcollection
-      const participantsCol = collection(waveRef, 'participants');
-      for (const participant of currentWave.participants) {
-        // Validate participant data before saving
-        if (!participant.id || !participant.name) {
-          console.error('❌ Invalid participant data:', participant);
-          continue;
-        }
-        
-        const participantRef = doc(participantsCol, participant.id);
-        const participantData = {
-          id: participant.id,
-          name: participant.name,
-          waveData: participant.waveData,
-          includeInLeaderboard: participant.includeInLeaderboard !== false, // Default to true unless explicitly false
-          updatedAt: new Date().toISOString()
-        };
-        
-        await setDoc(participantRef, participantData, { merge: true });
-      }
-      
-      // Trigger immediate sync for other users
-      await syncWithFirebase();
+      await saveWavePerformance(wave.id, activeEventId);
       
       // Show success state
       setSaveState('saved');

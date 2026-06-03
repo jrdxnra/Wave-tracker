@@ -437,27 +437,29 @@ interface WaveStore {
   updateParticipantLeaderboardStatus: (waveId: string, participantId: string, includeInLeaderboard: boolean) => Promise<void>;
 
   setEventNotes: (notes: string) => void;
-  updateWaveEvents: (events: string[]) => Promise<void>;
+  saveEventNotes: (notes: string, eventId: string) => Promise<void>;
+  updateWaveEvents: (events: string[], eventId: string) => Promise<void>;
   setTimingConfig: (
     intervalMinutes: number,
     workMinutes: number,
     restMinutes: number,
-    movementTimingMode?: MovementTimingMode,
-    movementIntervals?: MovementIntervals
+    movementTimingMode: MovementTimingMode,
+    movementIntervals: MovementIntervals,
+    eventId: string
   ) => Promise<void>;
-  setMaxParticipants: (maxParticipants: number) => Promise<void>;
-  setWorkoutTimerConfig: (workSeconds: number, restSeconds: number) => Promise<void>;
-  setEventConfig: (startDate: string, startTime: string, totalWaves: number) => Promise<void>;
+  setMaxParticipants: (maxParticipants: number, eventId: string) => Promise<void>;
+  setWorkoutTimerConfig: (workSeconds: number, restSeconds: number, eventId: string) => Promise<void>;
+  setEventConfig: (startDate: string, startTime: string, totalWaves: number, eventId: string) => Promise<void>;
   setAccessPasscode: (passcode: string) => Promise<void>;
   setPasscodeProtectionEnabled: (enabled: boolean) => Promise<void>;
   setEventClockEnabled: (enabled: boolean) => Promise<void>;
-  setFeedbackEnabled: (enabled: boolean) => Promise<void>;
+  setFeedbackEnabled: (enabled: boolean, eventId: string) => Promise<void>;
   submitFeedback: (rating: number, message: string) => Promise<void>;
   loadFeedbackEntries: (eventId?: string) => Promise<FeedbackEntry[]>;
   createEvent: (name: string) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
   setActiveEvent: (eventId: string) => Promise<void>;
-  updateEventBranding: (updates: Partial<EventBranding>) => Promise<void>;
+  updateEventBranding: (updates: Partial<EventBranding>, eventId: string) => Promise<void>;
   loadEventsCatalog: () => Promise<void>;
   saveAll: () => Promise<void>;
   loadAll: () => Promise<void>;
@@ -472,6 +474,7 @@ interface WaveStore {
   forceUpdateAllParticipants: () => Promise<void>;
   setUserActivity: () => void; // Mark user as active
   setSyncInterval: (interval: number) => void; // Set sync interval
+  saveWavePerformance: (waveId: string, eventId: string) => Promise<void>;
 }
 
 const createInitialWaveData = (events: string[]): Record<string, string> =>
@@ -488,6 +491,20 @@ function normalizeFeedbackEntry(eventId: string, id: string, data: Partial<Feedb
     message: typeof data.message === 'string' ? data.message : '',
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
   };
+}
+
+function resolveTargetEventId(state: Pick<WaveStore, 'activeEventId' | 'eventsCatalog'>, eventId: string): string {
+  const targetEventId = (eventId || '').trim();
+  if (!targetEventId) {
+    throw new Error('Cannot write event-scoped data without a target event id.');
+  }
+
+  const eventExists = state.eventsCatalog.some((event) => event.id === targetEventId);
+  if (!eventExists && targetEventId !== state.activeEventId) {
+    throw new Error(`Refusing to write event-scoped data for unknown event id: ${targetEventId}`);
+  }
+
+  return targetEventId;
 }
 
 /** Load all participants from a wave's Firestore subcollection. */
@@ -783,14 +800,40 @@ export const useWaveStore = create<WaveStore>()(
       },
 
       setEventNotes: (notes) => set({ eventNotes: notes }),
+
+      saveEventNotes: async (notes, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        if (targetEventId === state.activeEventId) {
+          set({ eventNotes: notes });
+        }
+
+        try {
+          const { db } = getFirebase();
+          const configRef = getEventConfigRef(db, targetEventId);
+          await setDoc(configRef, {
+            eventNotes: notes,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+
+          await get().syncWithFirebase();
+        } catch (error) {
+          console.error('❌ Failed to save event notes to Firebase:', error);
+          throw error;
+        }
+      },
       
-      setTimingConfig: async (intervalMinutes, workMinutes, restMinutes, movementTimingMode = 'global', movementIntervals = {}) => {
-        set({ intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals });
+      setTimingConfig: async (intervalMinutes, workMinutes, restMinutes, movementTimingMode = 'global', movementIntervals = {}, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        if (targetEventId === state.activeEventId) {
+          set({ intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals });
+        }
         
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const configRef = getEventConfigRef(db, get().activeEventId);
+          const configRef = getEventConfigRef(db, targetEventId);
           await setDoc(configRef, {
             timing: {
               intervalMinutes,
@@ -806,13 +849,17 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
       
-      setMaxParticipants: async (maxParticipants) => {
-        set({ maxParticipants });
+      setMaxParticipants: async (maxParticipants, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        if (targetEventId === state.activeEventId) {
+          set({ maxParticipants });
+        }
         
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const configRef = getEventConfigRef(db, get().activeEventId);
+          const configRef = getEventConfigRef(db, targetEventId);
           await setDoc(configRef, {
             maxParticipants,
             updatedAt: new Date().toISOString()
@@ -822,13 +869,17 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
 
-      setWorkoutTimerConfig: async (workSeconds, restSeconds) => {
-        set({ workoutTimerWorkSeconds: workSeconds, workoutTimerRestSeconds: restSeconds });
+      setWorkoutTimerConfig: async (workSeconds, restSeconds, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        if (targetEventId === state.activeEventId) {
+          set({ workoutTimerWorkSeconds: workSeconds, workoutTimerRestSeconds: restSeconds });
+        }
         
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const configRef = getEventConfigRef(db, get().activeEventId);
+          const configRef = getEventConfigRef(db, targetEventId);
           await setDoc(configRef, {
             workoutTimer: {
               workSeconds,
@@ -841,13 +892,17 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
 
-      setEventConfig: async (startDate, startTime, totalWaves) => {
-        set({ eventStartDate: startDate, eventStartTime: startTime, totalWaves: totalWaves });
+      setEventConfig: async (startDate, startTime, totalWaves, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        if (targetEventId === state.activeEventId) {
+          set({ eventStartDate: startDate, eventStartTime: startTime, totalWaves: totalWaves });
+        }
         
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
-          const configRef = getEventConfigRef(db, get().activeEventId);
+          const configRef = getEventConfigRef(db, targetEventId);
           await setDoc(configRef, {
             event: {
               startDate,
@@ -910,12 +965,16 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
 
-      setFeedbackEnabled: async (enabled) => {
-        set({ feedbackEnabled: enabled });
+      setFeedbackEnabled: async (enabled, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        if (targetEventId === state.activeEventId) {
+          set({ feedbackEnabled: enabled });
+        }
 
         try {
           const { db } = getFirebase();
-          const configRef = getEventConfigRef(db, get().activeEventId);
+          const configRef = getEventConfigRef(db, targetEventId);
           await setDoc(configRef, {
             feedbackEnabled: enabled,
             updatedAt: new Date().toISOString(),
@@ -1181,28 +1240,32 @@ export const useWaveStore = create<WaveStore>()(
         await get().loadAll();
       },
 
-      updateEventBranding: async (updates) => {
-        const current = get().eventBranding;
+      updateEventBranding: async (updates, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        const current = state.eventBranding;
         const nextBranding: EventBranding = {
           ...current,
           ...updates,
         };
         const brandingForFirestore = sanitizeBrandingForFirestore(nextBranding);
 
-        set({
-          eventBranding: nextBranding,
-          themeColors: getThemeColors(nextBranding),
-        });
+        if (targetEventId === state.activeEventId) {
+          set({
+            eventBranding: nextBranding,
+            themeColors: getThemeColors(nextBranding),
+          });
+        }
 
         const { db } = getFirebase();
-        await setDoc(getEventConfigRef(db, get().activeEventId), {
+        await setDoc(getEventConfigRef(db, targetEventId), {
           branding: brandingForFirestore,
           updatedAt: new Date().toISOString(),
         }, { merge: true });
 
         if (updates.title && updates.title.trim()) {
           const nextEvents = get().eventsCatalog.map((e) =>
-            e.id === get().activeEventId ? { ...e, name: updates.title!.trim() } : e
+            e.id === targetEventId ? { ...e, name: updates.title!.trim() } : e
           );
           set({ eventsCatalog: nextEvents });
           await setDoc(getEventsIndexRef(db), {
@@ -1212,11 +1275,16 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
 
-      updateWaveEvents: async (events) => {
-        set({ customEvents: events });
+      updateWaveEvents: async (events, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        const canUpdateLocalState = targetEventId === state.activeEventId;
+        if (canUpdateLocalState) {
+          set({ customEvents: events });
+        }
         
         // Update all existing participants to include new events
-        const waves = get().waves;
+        const waves = canUpdateLocalState ? get().waves : {};
         const updatedWaves = Object.keys(waves).reduce((acc, waveId) => {
           const wave = waves[waveId];
           const updatedParticipants = wave.participants.map(participant => ({
@@ -1229,14 +1297,16 @@ export const useWaveStore = create<WaveStore>()(
           acc[waveId] = { ...wave, participants: updatedParticipants };
           return acc;
         }, {} as Record<string, Wave>);
-        set({ waves: updatedWaves });
+        if (canUpdateLocalState) {
+          set({ waves: updatedWaves });
+        }
         
         // Save to Firebase immediately
         try {
           const { db } = getFirebase();
           
           // Save config to Firebase
-          const configRef = getEventConfigRef(db, get().activeEventId);
+          const configRef = getEventConfigRef(db, targetEventId);
           await setDoc(configRef, {
             customEvents: events,
             updatedAt: new Date().toISOString()
@@ -1245,7 +1315,7 @@ export const useWaveStore = create<WaveStore>()(
           // Update all existing participants in Firebase with new events
           
           for (const [waveId, wave] of Object.entries(updatedWaves)) {
-            const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
+            const waveRef = doc(getEventWavesCollection(db, targetEventId), waveId);
             const participantsCol = collection(waveRef, 'participants');
             
             for (const participant of wave.participants) {
@@ -1931,6 +2001,45 @@ export const useWaveStore = create<WaveStore>()(
         } catch (error) {
           console.error('❌ Failed to force update participants:', error);
         }
+      },
+
+      saveWavePerformance: async (waveId, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        const currentWave = state.waves[waveId];
+        if (!currentWave) {
+          throw new Error(`Cannot save wave performance for unknown wave: ${waveId}`);
+        }
+
+        const { db } = getFirebase();
+        const waveRef = doc(getEventWavesCollection(db, targetEventId), waveId);
+
+        await setDoc(waveRef, {
+          id: currentWave.id,
+          name: currentWave.name,
+          startTime: currentWave.startTime,
+          coach: currentWave.coach || '',
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        const participantsCol = collection(waveRef, 'participants');
+        for (const participant of currentWave.participants) {
+          if (!participant.id || !participant.name) {
+            console.error('❌ Invalid participant data:', participant);
+            continue;
+          }
+
+          const participantRef = doc(participantsCol, participant.id);
+          await setDoc(participantRef, {
+            id: participant.id,
+            name: participant.name,
+            waveData: participant.waveData,
+            includeInLeaderboard: participant.includeInLeaderboard !== false,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        }
+
+        await get().syncWithFirebase();
       },
 
       // Mark user as active (for smart sync optimization)

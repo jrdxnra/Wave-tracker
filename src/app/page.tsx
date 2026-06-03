@@ -9,8 +9,6 @@ import ConfigurationModal from '@/components/ConfigurationModal';
 import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
 import PasscodeProtection from '@/components/PasscodeProtection';
 import EventPageHeader from '@/components/EventPageHeader';
-import { getFirebase } from '@/lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
 
 export default function Page() {
   const [mounted, setMounted] = useState(clientHasMounted);
@@ -24,8 +22,8 @@ export default function Page() {
     eventBranding,
     addWave,
     setEventNotes,
+    saveEventNotes,
     loadAll,
-    syncWithFirebase,
     clearCacheAndReload,
   } = useWaveStore();
 
@@ -33,15 +31,7 @@ export default function Page() {
 
   const handleManualSave = async () => {
     try {
-      // Save event notes to Firebase
-      const { db } = getFirebase();
-      const configRef = doc(db, 'events', activeEventId, 'config', 'global');
-      await setDoc(configRef, {
-        eventNotes: eventNotes,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-      // Trigger immediate sync for other users
-      await syncWithFirebase();
+      await saveEventNotes(eventNotes, activeEventId);
       alert('Event notes saved successfully!');
     } catch (error) {
       console.error('❌ Failed to save event notes:', error);
