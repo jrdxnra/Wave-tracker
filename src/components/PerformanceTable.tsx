@@ -27,6 +27,7 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
     movementIntervals,
     updateParticipantData,
     saveWavePerformance,
+    themeColors,
   } = useWaveStore();
 
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -175,8 +176,8 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
           <thead>
             {/* Movement times row */}
             {movementTimes.length > 0 && (
-              <tr className="bg-blue-50">
-                <th className="px-4 py-2 text-center text-xs font-semibold text-blue-800 border-b border-gray-200">
+              <tr style={{ background: `linear-gradient(90deg, ${themeColors.start}14 0%, ${themeColors.mid}14 55%, ${themeColors.end}14 100%)` }}>
+                <th className="px-4 py-2 text-center text-xs font-semibold border-b border-gray-200" style={{ color: themeColors.accentHover }}>
                   <div className="flex flex-col items-center">
                     {movementTimingMode !== 'individual' ? (
                       <>
@@ -187,10 +188,10 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
                   </div>
                 </th>
                 {movementTimes.map((timing, idx) => (
-                  <th key={idx} className="px-4 py-2 text-center text-xs font-semibold text-blue-800 border-b border-gray-200">
+                  <th key={idx} className="px-4 py-2 text-center text-xs font-semibold border-b border-gray-200" style={{ color: themeColors.accentHover }}>
                     <div>{timing.startLabel}</div>
                     {movementTimingMode === 'individual' && (
-                      <div className="text-[10px] font-medium text-blue-700">
+                      <div className="text-[10px] font-medium" style={{ color: themeColors.mid }}>
                         W{timing.workMinutes}/R{timing.restMinutes}
                       </div>
                     )}
@@ -251,7 +252,7 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
                       }}
                       data-participant-index={index}
                       data-event-index={eventIndex}
-                      className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--brand-accent)] focus:border-[var(--brand-accent)]"
                       placeholder=""
                     />
                   </td>

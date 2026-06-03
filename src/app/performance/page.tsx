@@ -12,7 +12,7 @@ import PasscodeProtection from '@/components/PasscodeProtection';
 import EventPageHeader from '@/components/EventPageHeader';
 
 export default function PerformancePage() {
-  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, eventBranding, activeEventId, eventClockEnabled, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, setUserActivity, isDataLoaded } = useWaveStore();
+  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, eventBranding, activeEventId, eventClockEnabled, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, setUserActivity, isDataLoaded, themeColors } = useWaveStore();
 
   const [mounted, setMounted] = useState(clientHasMounted);
   // Pre-initialize as complete when store already has data (instant page transitions)
@@ -89,7 +89,10 @@ export default function PerformancePage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <div
+            className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4"
+            style={{ borderBottomColor: themeColors.accent }}
+          ></div>
           <p className="text-gray-600">Loading Performance Tracker...</p>
         </div>
       </div>

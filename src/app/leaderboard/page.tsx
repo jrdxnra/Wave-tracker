@@ -132,7 +132,10 @@ export default function Leaderboard() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <div
+            className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4"
+            style={{ borderBottomColor: themeColors.accent }}
+          ></div>
           <p className="text-gray-600">Loading Leaderboard...</p>
         </div>
       </div>
@@ -206,19 +209,22 @@ export default function Leaderboard() {
                   return (
                     <div key={`${entry.name}-${index}`} className="flex items-center justify-between bg-white p-3 rounded-lg shadow border border-gray-200">
                       <div className="flex items-center space-x-3">
-                        <div className="flex items-center justify-center w-8 h-8 bg-orange-600 text-white rounded-full font-bold text-sm">
+                        <div
+                          className="flex items-center justify-center w-8 h-8 text-white rounded-full font-bold text-sm"
+                          style={{ background: `linear-gradient(135deg, ${themeColors.start} 0%, ${themeColors.mid} 100%)` }}
+                        >
                           {rank}
                         </div>
                         <div>
                           <div className="font-semibold text-gray-900 flex items-center gap-2">
                             {entry.name}
-                            {isTied && <span className="text-xs text-orange-600 font-normal">(tied)</span>}
+                            {isTied && <span className="text-xs font-normal" style={{ color: themeColors.accent }}>(tied)</span>}
                           </div>
                           {showWave && <div className="text-xs text-gray-500">{entry.waveName}</div>}
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-lg text-orange-600">{entry.value}</div>
+                        <div className="font-bold text-lg" style={{ color: themeColors.accent }}>{entry.value}</div>
                         <div className="text-xs text-gray-500">reps</div>
                       </div>
                     </div>
@@ -236,7 +242,10 @@ export default function Leaderboard() {
                 {showAll && (
                   <button
                     onClick={() => setShowAllLeaderboards(prev => { const next = new Set(prev); next.delete(leaderboardId); return next; })}
-                    className="w-full mt-4 py-3 px-4 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg shadow transition-colors duration-200 flex items-center justify-center gap-2"
+                    className="w-full mt-4 py-3 px-4 text-white font-semibold rounded-lg shadow transition-colors duration-200 flex items-center justify-center gap-2"
+                    style={{
+                      background: `linear-gradient(135deg, ${themeColors.mid} 0%, ${themeColors.start} 100%)`,
+                    }}
                   >
                     <span>Show Less</span>
                   </button>
@@ -309,8 +318,24 @@ export default function Leaderboard() {
                     <button
                       key={n}
                       onClick={() => setTotalTopN(n)}
-                      className={`w-7 h-7 flex items-center justify-center rounded-full border font-semibold text-xs transition-colors duration-150 ${totalTopN === n ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-orange-50'}`}
-                      style={{ minWidth: '1.75rem', minHeight: '1.75rem', padding: 0 }}
+                      className="w-7 h-7 flex items-center justify-center rounded-full border font-semibold text-xs transition-colors duration-150"
+                      style={totalTopN === n
+                        ? {
+                            minWidth: '1.75rem',
+                            minHeight: '1.75rem',
+                            padding: 0,
+                            color: '#fff',
+                            borderColor: themeColors.accent,
+                            background: `linear-gradient(135deg, ${themeColors.start} 0%, ${themeColors.mid} 55%, ${themeColors.end} 100%)`,
+                          }
+                        : {
+                            minWidth: '1.75rem',
+                            minHeight: '1.75rem',
+                            padding: 0,
+                            color: themeColors.accentHover,
+                            borderColor: `${themeColors.mid}55`,
+                            backgroundColor: `${themeColors.end}18`,
+                          }}
                       aria-label={`Show top ${n}`}
                     >
                       {n}
