@@ -23,6 +23,8 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
     customEvents,
     workMinutes,
     restMinutes,
+    movementTimingMode,
+    movementIntervals,
     updateParticipantData,
     saveWavePerformance,
   } = useWaveStore();
@@ -85,11 +87,28 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
     };
     
     const startDate = parseStart(wave.startTime) || new Date();
-    // Movement times are every (work + rest) minutes, not wave start interval
-    const movementInterval = workMinutes + restMinutes;
-    return customEvents.map((_, idx) => {
-      const t = new Date(startDate.getTime() + idx * movementInterval * 60000);
-      return t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const movementDurations = customEvents.map((movementName) => {
+      const individual = movementIntervals[movementName];
+      const nextWork = movementTimingMode === 'individual'
+        ? Math.max(0, Number(individual?.workMinutes) || workMinutes)
+        : workMinutes;
+      const nextRest = movementTimingMode === 'individual'
+        ? Math.max(0, Number(individual?.restMinutes) || restMinutes)
+        : restMinutes;
+      return {
+        workMinutes: nextWork,
+        restMinutes: nextRest,
+      };
+    });
+
+    let elapsedMinutes = 0;
+    return movementDurations.map((duration) => {
+      const t = new Date(startDate.getTime() + elapsedMinutes * 60000);
+      elapsedMinutes += duration.workMinutes + duration.restMinutes;
+      return {
+        startLabel: t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+        ...duration,
+      };
     });
   };
 
@@ -159,13 +178,27 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
               <tr className="bg-blue-50">
                 <th className="px-4 py-2 text-center text-xs font-semibold text-blue-800 border-b border-gray-200">
                   <div className="flex flex-col items-center">
-                    <div>Timing: every {workMinutes + restMinutes} min</div>
-                    <div>Work {workMinutes}/ Rest {restMinutes}</div>
+                    {movementTimingMode === 'individual' ? (
+                      <>
+                        <div>Timing: individual by movement</div>
+                        <div>Per-move W/R shown under each start time</div>
+                      </>
+                    ) : (
+                      <>
+                        <div>Timing: every {workMinutes + restMinutes} min</div>
+                        <div>Work {workMinutes}/ Rest {restMinutes}</div>
+                      </>
+                    )}
                   </div>
                 </th>
-                {movementTimes.map((time, idx) => (
+                {movementTimes.map((timing, idx) => (
                   <th key={idx} className="px-4 py-2 text-center text-xs font-semibold text-blue-800 border-b border-gray-200">
-                    {time}
+                    <div>{timing.startLabel}</div>
+                    {movementTimingMode === 'individual' && (
+                      <div className="text-[10px] font-medium text-blue-700">
+                        W{timing.workMinutes}/R{timing.restMinutes}
+                      </div>
+                    )}
                   </th>
                 ))}
               </tr>
