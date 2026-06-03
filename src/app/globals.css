@@ -195,6 +195,16 @@ body:before {
   background: linear-gradient(135deg, var(--brand-accent-hover), var(--brand-end));
 }
 
+.input-focus-brand {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input-focus-brand:focus {
+  outline: none;
+  border-color: var(--brand-accent);
+  box-shadow: 0 0 0 2px rgb(var(--brand-accent-rgb) / 0.28);
+}
+
 /* Print Only */
 .print-only-text { display: none; }
 

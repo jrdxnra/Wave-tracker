@@ -252,7 +252,7 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
                       }}
                       data-participant-index={index}
                       data-event-index={eventIndex}
-                      className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--brand-accent)] focus:border-[var(--brand-accent)]"
+                      className="w-full px-2 py-1 border border-gray-300 rounded input-focus-brand"
                       placeholder=""
                     />
                   </td>

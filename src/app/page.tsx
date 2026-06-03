@@ -144,7 +144,7 @@ export default function Page() {
                   <textarea
                     value={eventNotes}
                     onChange={(e) => setEventNotes(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--brand-accent)] focus:border-[var(--brand-accent)] resize-vertical"
+                    className="w-full p-3 border border-gray-300 rounded-md input-focus-brand resize-vertical"
                     rows={4}
                     placeholder="Enter event notes, special instructions, or additional details..."
                   />

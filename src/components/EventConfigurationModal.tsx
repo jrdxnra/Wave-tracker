@@ -366,12 +366,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
               type="button"
               onClick={handleSave}
               disabled={isSaving}
-              className="flex-1 sm:flex-none px-4 py-2 sm:px-6 sm:py-3 text-white border-2 rounded-lg transition-all active:scale-95 font-semibold"
-              style={{
-                backgroundColor: eventBranding?.customGradient?.mid || eventBranding?.customColor || '#ea580c',
-                borderColor: eventBranding?.customGradient?.mid || eventBranding?.customColor || '#ea580c',
-                color: eventBranding?.customGradient?.mid ? '#fff' : '',
-              }}
+              className="btn-secondary flex-1 sm:flex-none px-4 py-2 sm:px-6 sm:py-3 text-white rounded-lg transition-all active:scale-95 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isSaving ? 'Saving...' : 'Save Event Changes'}
             </button>
