@@ -782,8 +782,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           </div>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-4">
-          <div>
+        <div className="mb-4 flex flex-nowrap items-start gap-4">
+          <div className="min-w-0 flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">Total Waves</label>
             <input
               type="number"
@@ -793,7 +793,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
             />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">Max Participants</label>
             <select
               value={maxParticipantsLocal}
