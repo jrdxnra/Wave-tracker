@@ -60,7 +60,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
     const printWave = snapshot.wave;
     const coachName = (printWave.coach || '').trim();
     const waveDisplayName = coachName
-      ? `${printWave.name} w/ Coach "${coachName}"`
+      ? `${printWave.name} w/ Coach ${coachName}`
       : printWave.name;
     const printEvents = snapshot.customEvents;
     // Compute dynamic Name column width based on the average of the longest names
