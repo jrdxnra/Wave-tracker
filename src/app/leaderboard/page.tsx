@@ -13,6 +13,7 @@ import ConfigurationModal from '@/components/ConfigurationModal';
 import EventTimeline from '@/components/EventTimeline';
 import EventClock from '@/components/EventClock';
 import EventPageHeader from '@/components/EventPageHeader';
+import LoadingState from '@/components/LoadingState';
 
 interface LeaderboardEntry {
   name: string;
@@ -129,17 +130,7 @@ export default function Leaderboard() {
 
   // Show loading spinner if not mounted or data not loaded
   if (!mounted || !isDataLoaded) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div
-            className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4"
-            style={{ borderBottomColor: themeColors.accent }}
-          ></div>
-          <p className="text-gray-600">Loading Leaderboard...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Loading Leaderboard..." />;
   }
 
   // Accordion-aware leaderboard renderer

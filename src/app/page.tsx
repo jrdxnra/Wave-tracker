@@ -9,6 +9,7 @@ import ConfigurationModal from '@/components/ConfigurationModal';
 import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
 import PasscodeProtection from '@/components/PasscodeProtection';
 import EventPageHeader from '@/components/EventPageHeader';
+import LoadingState from '@/components/LoadingState';
 
 export default function Page() {
   const [mounted, setMounted] = useState(clientHasMounted);
@@ -61,17 +62,7 @@ export default function Page() {
 
   // Prevent hydration mismatch: use deterministic fallback before mount.
   if (!mounted) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div
-            className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4"
-            style={{ borderBottomColor: themeColors.accent }}
-          ></div>
-          <p className="text-gray-600">Loading event data...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Loading event data..." />;
   }
 
   // Always define accent after mount
