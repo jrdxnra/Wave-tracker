@@ -28,14 +28,28 @@ function validateFirebaseConfig() {
 let app: FirebaseApp;
 let db: Firestore;
 
+function isSafariBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  const isSafari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Android/.test(ua);
+  return isSafari;
+}
+
 export function getFirebase() {
   if (!app) {
     validateFirebaseConfig();
     app = getApps().length ? getApps()[0]! : initializeApp(firebaseConfig);
     try {
-      db = initializeFirestore(app, {
-        experimentalAutoDetectLongPolling: true,
-      });
+      const safari = isSafariBrowser();
+      db = initializeFirestore(app, safari
+        ? {
+            // Safari can intermittently hang with default transport settings.
+            experimentalForceLongPolling: true,
+          }
+        : {
+            experimentalAutoDetectLongPolling: true,
+          }
+      );
     } catch {
       db = getFirestore(app);
     }
