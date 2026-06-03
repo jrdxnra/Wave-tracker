@@ -761,7 +761,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           <p className="text-sm text-gray-600">This section controls the active event schedule and wave movement setup.</p>
         </div>
 
-        <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Event Start Date</label>
             <input
@@ -780,6 +780,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
             />
           </div>
+        </div>
+
+        <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Total Waves</label>
             <input
@@ -790,18 +793,6 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
             />
           </div>
-          {movementTimingModeLocal === 'global' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Wave Start Interval (min)</label>
-              <input
-                type="number"
-                min={1}
-                value={interval}
-                onChange={(e) => setInterval(parseInt(e.target.value || '1', 10))}
-                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-              />
-            </div>
-          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Max Participants</label>
             <select
@@ -825,7 +816,17 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         </div>
 
         {movementTimingModeLocal === 'global' && (
-          <div className="mb-4 grid grid-cols-2 gap-4">
+          <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Wave Start Interval (min)</label>
+              <input
+                type="number"
+                min={1}
+                value={interval}
+                onChange={(e) => setInterval(parseInt(e.target.value || '1', 10))}
+                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Work (min)</label>
               <input
