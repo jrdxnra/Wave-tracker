@@ -4,6 +4,11 @@
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+function isInspectEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.__INSPECT_ENABLED === true;
+}
+
 export const initSecurity = () => {
   if (typeof window === 'undefined' || !isProduction) {
     return;
@@ -14,6 +19,7 @@ export const initSecurity = () => {
 
   // Disable right-click context menu (makes it slightly harder to inspect)
   document.addEventListener('contextmenu', (e) => {
+    if (isInspectEnabled()) return;
     e.preventDefault();
     return false;
   });
@@ -24,7 +30,7 @@ export const initSecurity = () => {
     const widthThreshold = window.outerWidth - window.innerWidth > threshold;
     const heightThreshold = window.outerHeight - window.innerHeight > threshold;
     
-    if (widthThreshold || heightThreshold) {
+    if (!isInspectEnabled() && (widthThreshold || heightThreshold)) {
       // DevTools likely open - clear console
       console.clear();
     }
@@ -35,6 +41,8 @@ export const initSecurity = () => {
 
   // Disable common keyboard shortcuts for DevTools
   document.addEventListener('keydown', (e) => {
+    if (isInspectEnabled()) return;
+
     // F12
     if (e.key === 'F12') {
       e.preventDefault();
