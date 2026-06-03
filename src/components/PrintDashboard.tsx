@@ -17,7 +17,16 @@ interface PrintDashboardProps {
 }
 
 export default function PrintDashboard({ wave }: PrintDashboardProps) {
-  const { customEvents, eventNotes, workMinutes, restMinutes, eventBranding, themeColors } = useWaveStore();
+  const {
+    customEvents,
+    eventNotes,
+    workMinutes,
+    restMinutes,
+    movementTimingMode,
+    movementIntervals,
+    eventBranding,
+    themeColors,
+  } = useWaveStore();
   const leftEmoji = eventBranding.emojiLeft?.trim() || '';
   const rightEmoji = eventBranding.emojiRight?.trim() || '';
 
@@ -31,6 +40,8 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
       notes: eventNotes || '',
       workMinutes,
       restMinutes,
+      movementTimingMode,
+      movementIntervals: { ...movementIntervals },
       customEvents: [...customEvents],
       wave: {
         id: wave.id,
@@ -89,11 +100,28 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
     };
 
     const startDate = parseStart(printWave.startTime) || new Date();
-    // Movement times are every (work + rest) minutes, not wave start interval
-    const movementInterval = snapshot.workMinutes + snapshot.restMinutes;
-    const movementTimes = printEvents.map((_, idx) => {
-      const t = new Date(startDate.getTime() + idx * movementInterval * 60000);
-      return t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const movementDurations = printEvents.map((movementName) => {
+      const individual = snapshot.movementIntervals[movementName];
+      const nextWork = snapshot.movementTimingMode === 'individual'
+        ? Math.max(0, Number(individual?.workMinutes) || snapshot.workMinutes)
+        : snapshot.workMinutes;
+      const nextRest = snapshot.movementTimingMode === 'individual'
+        ? Math.max(0, Number(individual?.restMinutes) || snapshot.restMinutes)
+        : snapshot.restMinutes;
+      return {
+        workMinutes: nextWork,
+        restMinutes: nextRest,
+      };
+    });
+
+    let elapsedMinutes = 0;
+    const movementTimes = movementDurations.map((duration) => {
+      const t = new Date(startDate.getTime() + elapsedMinutes * 60000);
+      elapsedMinutes += duration.workMinutes + duration.restMinutes;
+      return {
+        startLabel: t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+        ...duration,
+      };
     });
 
     
@@ -379,10 +407,16 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
               <tr>
                 <th class="col-num"></th>
                 <th class="col-name" style="font-weight:600;text-transform:none;color:#1f2937;">
-                  <div>Timing: every ${movementInterval} min</div>
-                  <div>Work ${snapshot.workMinutes}/ Rest ${snapshot.restMinutes}</div>
+                  ${snapshot.movementTimingMode === 'individual'
+                    ? '<div>&nbsp;</div><div>&nbsp;</div>'
+                    : `<div>Timing: every ${snapshot.workMinutes + snapshot.restMinutes} min</div><div>Work ${snapshot.workMinutes}/ Rest ${snapshot.restMinutes}</div>`}
                 </th>
-                ${movementTimes.map(t => `<th class="time-header">${t}</th>`).join('')}
+                ${movementTimes.map((timing) => `
+                  <th class="time-header">
+                    <div>${timing.startLabel}</div>
+                    ${snapshot.movementTimingMode === 'individual' ? `<div style="font-size:6.5pt;font-weight:600;color:#1d4ed8;">W${timing.workMinutes}/R${timing.restMinutes}</div>` : ''}
+                  </th>
+                `).join('')}
               </tr>
               <tr>
                 <th class="col-num">#</th>
