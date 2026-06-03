@@ -132,13 +132,13 @@ body:before {
 }
 
 .btn-secondary { 
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); /* blue gradient */
+  background-color: #2563eb;
   color: white; 
   transition: all 0.3s ease;
   border: none;
 }
 .btn-secondary:hover { 
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  background-color: #1d4ed8;
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
 }
