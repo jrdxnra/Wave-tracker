@@ -790,16 +790,18 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Wave Start Interval (min)</label>
-            <input
-              type="number"
-              min={1}
-              value={interval}
-              onChange={(e) => setInterval(parseInt(e.target.value || '1', 10))}
-              className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
-            />
-          </div>
+          {movementTimingModeLocal === 'global' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Wave Start Interval (min)</label>
+              <input
+                type="number"
+                min={1}
+                value={interval}
+                onChange={(e) => setInterval(parseInt(e.target.value || '1', 10))}
+                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Max Participants</label>
             <select
