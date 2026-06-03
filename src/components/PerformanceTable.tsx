@@ -178,17 +178,12 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
               <tr className="bg-blue-50">
                 <th className="px-4 py-2 text-center text-xs font-semibold text-blue-800 border-b border-gray-200">
                   <div className="flex flex-col items-center">
-                    {movementTimingMode === 'individual' ? (
-                      <>
-                        <div>Timing: individual by movement</div>
-                        <div>Per-move W/R shown under each start time</div>
-                      </>
-                    ) : (
+                    {movementTimingMode !== 'individual' ? (
                       <>
                         <div>Timing: every {workMinutes + restMinutes} min</div>
                         <div>Work {workMinutes}/ Rest {restMinutes}</div>
                       </>
-                    )}
+                    ) : null}
                   </div>
                 </th>
                 {movementTimes.map((timing, idx) => (
