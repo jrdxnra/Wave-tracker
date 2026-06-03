@@ -381,6 +381,7 @@ interface FirebaseEventsIndexData {
 interface FirebaseWaveData {
   name?: string;
   startTime?: string;
+  coach?: string;
 }
 
 type MovementTimingMode = 'global' | 'individual';
@@ -1594,6 +1595,7 @@ export const useWaveStore = create<WaveStore>()(
                   id: waveDoc.id,
                   name: w.name || waveDoc.id,
                   startTime: w.startTime || '',
+                  coach: w.coach || '',
                   participants,
                 } as Wave,
               ] as const;
@@ -1722,6 +1724,7 @@ export const useWaveStore = create<WaveStore>()(
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
+                coach: w.coach || '',
                 participants,
               } as Wave;
               
@@ -1820,6 +1823,7 @@ export const useWaveStore = create<WaveStore>()(
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
+                coach: w.coach || '',
                 participants,
               } as Wave;
               
@@ -1884,6 +1888,7 @@ export const useWaveStore = create<WaveStore>()(
                 id: waveId,
                 name: w.name || waveId,
                 startTime: w.startTime || '',
+                coach: w.coach || '',
                 participants,
               } as Wave;
               

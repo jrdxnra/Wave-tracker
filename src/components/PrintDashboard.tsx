@@ -13,6 +13,7 @@ interface PrintDashboardProps {
       includeInLeaderboard?: boolean;
     }>;
     startTime: string;
+    coach?: string;
   };
 }
 
@@ -47,6 +48,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
         id: wave.id,
         name: wave.name,
         startTime: wave.startTime,
+        coach: wave.coach || '',
         participants: wave.participants.map((participant) => ({
           id: participant.id,
           name: participant.name,
@@ -56,6 +58,10 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
     };
 
     const printWave = snapshot.wave;
+    const coachName = (printWave.coach || '').trim();
+    const waveDisplayName = coachName
+      ? `${printWave.name} w/ Coach "${coachName}"`
+      : printWave.name;
     const printEvents = snapshot.customEvents;
     // Compute dynamic Name column width based on the average of the longest names
     const nameLengths = printWave.participants
@@ -398,7 +404,7 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
         <body>
           <div class="header">
             <div class="title">${snapshot.title} Wave Tracker</div>
-            <div class="wave-name">${printWave.name}</div>
+            <div class="wave-name">${waveDisplayName}</div>
             ${printWave.startTime ? `<div class="start-time">Start Time: ${printWave.startTime}</div>` : ''}
           </div>
 
