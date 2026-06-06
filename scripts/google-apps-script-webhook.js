@@ -86,7 +86,9 @@ function getCell(values, colMap, key) {
 }
 
 function isAllowedResponseSheet(name) {
-  return RESPONSE_SHEET_NAMES.includes(name);
+  if (RESPONSE_SHEET_NAMES.includes(name)) return true;
+  // Fallback for copied/renamed Google Form tabs such as "Form Responses 2".
+  return /form responses?/i.test(String(name || ''));
 }
 
 /**
@@ -336,7 +338,8 @@ function backfillPastedRows(startRow, endRow) {
   for (let row = first; row <= last; row += 1) {
     const nameValue = safeString(sheet.getRange(row, colMap.name || 1).getValue());
     if (!nameValue) continue;
-    sendPayload(sheet, row, colMap, "bulk_backfill");
+    // Use form_submit mode so replayed rows can auto-allocate when not yet assigned.
+    sendPayload(sheet, row, colMap, "form_submit");
   }
 
   debugLog("backfillPastedRows: complete", {
@@ -376,7 +379,8 @@ function syncNewRegistrationsFromSheet() {
   for (let row = start; row <= sheetLastRow; row += 1) {
     const nameValue = safeString(sheet.getRange(row, colMap.name || 1).getValue());
     if (!nameValue) continue;
-    sendPayload(sheet, row, colMap, 'time_driven_sync');
+    // Use form_submit mode so time-driven catch-up auto-allocates missed rows.
+    sendPayload(sheet, row, colMap, 'form_submit');
     processed += 1;
   }
 
@@ -387,6 +391,31 @@ function syncNewRegistrationsFromSheet() {
     endRow: sheetLastRow,
     processed: processed
   });
+}
+
+/**
+ * Manual recovery helper: replay one sheet row through auto-allocation path.
+ * Useful when a specific form row did not sync.
+ */
+function replayRowAsFormSubmit(rowNumber) {
+  const sheet = getResponseSheet();
+  if (!sheet) {
+    throw new Error('No response sheet found.');
+  }
+
+  const row = Number(rowNumber || 0);
+  if (!row || row <= 1) {
+    throw new Error('rowNumber must be >= 2');
+  }
+
+  const colMap = buildColumnMap(sheet);
+  const nameValue = safeString(sheet.getRange(row, colMap.name || 1).getValue());
+  if (!nameValue) {
+    throw new Error('Selected row has no participant name.');
+  }
+
+  sendPayload(sheet, row, colMap, 'form_submit');
+  debugLog('replayRowAsFormSubmit: replayed row', { row: row, name: nameValue });
 }
 
 function sendPayload(sheet, row, colMap, triggerSource) {

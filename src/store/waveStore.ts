@@ -7,7 +7,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { FeedbackEntry, Participant, Wave, WAVE_EVENTS } from '@/types';
+import { FeedbackEntry, MovementUnit, Participant, Wave, WAVE_EVENTS } from '@/types';
 import { getFirebase } from '@/lib/firebase';
 import { collection, collectionGroup, doc, setDoc, writeBatch, serverTimestamp, getDoc, getDocs, deleteDoc, DocumentReference, Firestore } from 'firebase/firestore';
 import { secureLogger } from '@/lib/secureLogger';
@@ -34,6 +34,25 @@ interface EventSummary {
 
 const DEFAULT_EVENT_ID = 'g-rox';
 const DEFAULT_EVENT_NAME = 'G-ROX';
+const DEFAULT_MOVEMENT_UNIT: MovementUnit = 'reps';
+
+function isMovementUnit(value: unknown): value is MovementUnit {
+  return value === 'reps'
+    || value === 'laps'
+    || value === 'cals'
+    || value === 'meters'
+    || value === 'seconds'
+    || value === 'rounds';
+}
+
+function buildMovementUnits(events: string[], existing: Record<string, unknown> = {}): Record<string, MovementUnit> {
+  return Object.fromEntries(
+    events.map((eventName) => {
+      const raw = existing[eventName];
+      return [eventName, isMovementUnit(raw) ? raw : DEFAULT_MOVEMENT_UNIT];
+    })
+  ) as Record<string, MovementUnit>;
+}
 
 const DEFAULT_BRANDING: EventBranding = {
   title: DEFAULT_EVENT_NAME,
@@ -144,6 +163,7 @@ function sanitizeBrandingForFirestore(branding: EventBranding): EventBranding {
 function buildDefaultEventConfig(title: string, date = new Date()): FirebaseConfigData {
   return {
     customEvents: WAVE_EVENTS,
+    movementUnits: buildMovementUnits(WAVE_EVENTS),
     timing: {
       intervalMinutes: 5,
       workMinutes: 3,
@@ -280,6 +300,7 @@ async function ensureDefaultEventConfigExists(db: Firestore): Promise<void> {
 
   await setDoc(defaultConfigRef, {
     customEvents: WAVE_EVENTS,
+    movementUnits: buildMovementUnits(WAVE_EVENTS),
     timing: {
       intervalMinutes: 5,
       workMinutes: 3,
@@ -347,6 +368,7 @@ async function ensureDefaultEventAvailable(db: Firestore): Promise<void> {
 // Firebase data types
 interface FirebaseConfigData {
   customEvents?: string[];
+  movementUnits?: Record<string, MovementUnit>;
   timing?: {
     intervalMinutes?: number;
     workMinutes?: number;
@@ -396,6 +418,7 @@ interface WaveStore {
   currentWaveId: string | null;
   eventNotes: string;
   customEvents: string[];
+  movementUnits: Record<string, MovementUnit>;
   intervalMinutes: number;
   workMinutes: number;
   restMinutes: number;
@@ -440,6 +463,7 @@ interface WaveStore {
   setEventNotes: (notes: string) => void;
   saveEventNotes: (notes: string, eventId: string) => Promise<void>;
   updateWaveEvents: (events: string[], eventId: string) => Promise<void>;
+  setMovementUnits: (movementUnits: Record<string, MovementUnit>, eventId: string) => Promise<void>;
   setTimingConfig: (
     intervalMinutes: number,
     workMinutes: number,
@@ -526,6 +550,7 @@ export const useWaveStore = create<WaveStore>()(
       currentWaveId: null,
       eventNotes: '',
       customEvents: WAVE_EVENTS,
+      movementUnits: buildMovementUnits(WAVE_EVENTS),
       intervalMinutes: 5,
       workMinutes: 3,
       restMinutes: 2,
@@ -1267,6 +1292,7 @@ export const useWaveStore = create<WaveStore>()(
           // Reset other event-specific state if needed
           eventNotes: '',
           customEvents: WAVE_EVENTS,
+          movementUnits: buildMovementUnits(WAVE_EVENTS),
           intervalMinutes: 5,
           workMinutes: 3,
           restMinutes: 2,
@@ -1324,8 +1350,9 @@ export const useWaveStore = create<WaveStore>()(
         const state = get();
         const targetEventId = resolveTargetEventId(state, eventId);
         const canUpdateLocalState = targetEventId === state.activeEventId;
+        const normalizedMovementUnits = buildMovementUnits(events, state.movementUnits);
         if (canUpdateLocalState) {
-          set({ customEvents: events });
+          set({ customEvents: events, movementUnits: normalizedMovementUnits });
         }
         
         // Update all existing participants to include new events
@@ -1354,6 +1381,7 @@ export const useWaveStore = create<WaveStore>()(
           const configRef = getEventConfigRef(db, targetEventId);
           await setDoc(configRef, {
             customEvents: events,
+            movementUnits: normalizedMovementUnits,
             updatedAt: new Date().toISOString()
           }, { merge: true });
           
@@ -1380,6 +1408,27 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
 
+      setMovementUnits: async (movementUnits, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        const normalizedMovementUnits = buildMovementUnits(state.customEvents, movementUnits);
+
+        if (targetEventId === state.activeEventId) {
+          set({ movementUnits: normalizedMovementUnits });
+        }
+
+        try {
+          const { db } = getFirebase();
+          const configRef = getEventConfigRef(db, targetEventId);
+          await setDoc(configRef, {
+            movementUnits: normalizedMovementUnits,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        } catch (error) {
+          console.error('❌ Failed to save movement units to Firebase:', error);
+        }
+      },
+
       // Batch save everything to Firestore (single-user)
       saveAll: async () => {
         const { db } = getFirebase();
@@ -1390,6 +1439,7 @@ export const useWaveStore = create<WaveStore>()(
         const batch = writeBatch(db);
         batch.set(configRef, {
           customEvents: s.customEvents,
+          movementUnits: s.movementUnits,
           timing: {
             intervalMinutes: s.intervalMinutes,
             workMinutes: s.workMinutes,
@@ -1467,6 +1517,15 @@ export const useWaveStore = create<WaveStore>()(
             if (Array.isArray(data.customEvents)) {
               set({ customEvents: data.customEvents as string[] });
             }
+            const movementNames = Array.isArray(data.customEvents)
+              ? data.customEvents as string[]
+              : get().customEvents;
+            set({
+              movementUnits: buildMovementUnits(
+                movementNames,
+                (data.movementUnits || {}) as Record<string, unknown>
+              ),
+            });
             if (data.timing) {
               const { intervalMinutes, workMinutes, restMinutes, movementMode, movementIntervals } = data.timing;
               const normalizedIntervals = Object.fromEntries(

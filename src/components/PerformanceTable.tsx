@@ -21,6 +21,7 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
   const {
     activeEventId,
     customEvents,
+    movementUnits,
     workMinutes,
     restMinutes,
     movementTimingMode,
@@ -224,7 +225,10 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
               </th>
               {customEvents.map((event) => (
                 <th key={event} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                  {event}
+                  <div>{event}</div>
+                  <div className="text-[10px] font-medium normal-case text-gray-400">
+                    {movementUnits[event] || 'reps'}
+                  </div>
                 </th>
               ))}
             </tr>

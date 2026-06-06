@@ -5,6 +5,8 @@ export interface Participant {
   includeInLeaderboard?: boolean; // Optional for backwards compatibility
 }
 
+export type MovementUnit = 'reps' | 'laps' | 'cals' | 'meters' | 'seconds' | 'rounds';
+
 export interface Wave {
   id: string;
   name: string;

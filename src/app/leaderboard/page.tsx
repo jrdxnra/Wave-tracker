@@ -23,6 +23,7 @@ interface LeaderboardEntry {
 
 interface ExerciseLeaderboard {
   exercise: string;
+  unit: string;
   entries: LeaderboardEntry[];
 }
 
@@ -31,7 +32,7 @@ export default function Leaderboard() {
   const [mounted, setMounted] = useState(clientHasMounted);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
-  const { waves, customEvents, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, eventBranding, clearCacheAndReload, loadAll, feedbackEnabled, submitFeedback, themeColors, isDataLoaded, eventClockEnabled, alertSettings, activeEventId } = useWaveStore();
+  const { waves, customEvents, movementUnits, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, eventBranding, clearCacheAndReload, loadAll, feedbackEnabled, submitFeedback, themeColors, isDataLoaded, eventClockEnabled, alertSettings, activeEventId } = useWaveStore();
   const [exerciseLeaderboards, setExerciseLeaderboards] = useState<ExerciseLeaderboard[]>([]);
   const [totalLeaderboard, setTotalLeaderboard] = useState<LeaderboardEntry[]>([]);
   // State for top N selection for Total leaderboard
@@ -80,7 +81,7 @@ export default function Leaderboard() {
         }
         
         let participantTotal = 0;
-        const participantKey = participant.name;
+        const participantKey = participant.id || `${wave.id}:${participant.name}`;
 
         // Process each exercise
         customEvents.forEach(event => {
@@ -111,6 +112,7 @@ export default function Leaderboard() {
     // Sort ALL entries for each exercise (no limit)
     const sortedExerciseLeaderboards: ExerciseLeaderboard[] = customEvents.map(event => ({
       exercise: event,
+      unit: movementUnits[event] || 'reps',
       entries: exerciseData[event]
         .sort((a, b) => b.value - a.value)
     }));
@@ -126,7 +128,7 @@ export default function Leaderboard() {
 
     setExerciseLeaderboards(sortedExerciseLeaderboards);
     setTotalLeaderboard(sortedTotalLeaderboard);
-  }, [mounted, waves, customEvents]);
+  }, [mounted, waves, customEvents, movementUnits]);
 
   // Show loading spinner if not mounted or data not loaded
   if (!mounted || !isDataLoaded) {
@@ -135,7 +137,7 @@ export default function Leaderboard() {
 
   // Accordion-aware leaderboard renderer
   // Add topN param for limiting entries (used for Total only)
-  const renderLeaderboard = (entries: LeaderboardEntry[], showWave = true, leaderboardId: string, isAccordion: boolean = false, topN?: number) => {
+  const renderLeaderboard = (entries: LeaderboardEntry[], showWave = true, leaderboardId: string, isAccordion: boolean = false, topN?: number, unitLabel: string = 'reps') => {
     // For movements, use accordion state; for total, always expanded
     const isExpanded = leaderboardId === 'total' ? true : expandedMovements[leaderboardId.replace('exercise-', '')];
     const showAll = showAllLeaderboards.has(leaderboardId);
@@ -216,7 +218,7 @@ export default function Leaderboard() {
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-lg" style={{ color: themeColors.accent }}>{entry.value}</div>
-                        <div className="text-xs text-gray-500">reps</div>
+                        <div className="text-xs text-gray-500">{unitLabel}</div>
                       </div>
                     </div>
                   );
@@ -295,13 +297,13 @@ export default function Leaderboard() {
         )}
 
         <main>
-          {/* Total Reps Leaderboard (always expanded, not collapsible) */}
+          {/* Total Score Leaderboard (always expanded, not collapsible) */}
           <div id="leaderboard-card-total" className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 mb-8">
             <div className="flex flex-row flex-nowrap items-center mb-6 gap-x-2 overflow-x-auto">
               <div className="flex flex-row flex-nowrap items-center gap-x-2">
                 <span className="text-3xl mr-2">🥇</span>
                 <h2 className="text-2xl font-semibold text-gray-900 flex items-center whitespace-nowrap">
-                  Total Reps
+                  Total Score
                 </h2>
                 {/* Top-N selector - fits inline with title on mobile */}
                 <div className="flex flex-row flex-nowrap items-center gap-x-1 ml-2">
@@ -335,14 +337,14 @@ export default function Leaderboard() {
                 </div>
               </div>
             </div>
-            {renderLeaderboard(totalLeaderboard, true, 'total', false, totalTopN)}
+            {renderLeaderboard(totalLeaderboard, true, 'total', false, totalTopN, 'points')}
           </div>
 
           {/* Exercise-specific Leaderboards as accordions */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {exerciseLeaderboards.map(({ exercise, entries }) => (
+            {exerciseLeaderboards.map(({ exercise, unit, entries }) => (
               <div key={exercise} id={`leaderboard-card-exercise-${exercise}`} className="mb-6">
-                {renderLeaderboard(entries, true, `exercise-${exercise}`, true)}
+                {renderLeaderboard(entries, true, `exercise-${exercise}`, true, undefined, unit)}
               </div>
             ))}
           </div>

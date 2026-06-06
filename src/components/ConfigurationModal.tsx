@@ -7,6 +7,7 @@ import { useWaveStore } from '@/store/waveStore';
 import PasscodeProtection from '@/components/PasscodeProtection';
 import { getFirebase } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { MovementUnit } from '@/types';
 
 function escapeCsvValue(value: string | number): string {
   const stringValue = String(value ?? '');
@@ -21,6 +22,7 @@ const CREATE_NEW_EVENT_OPTION = '__create_new_event__';
 const DEFAULT_EVENT_ID = 'g-rox';
 const MAX_PARTICIPANTS_MIN = 1;
 const MAX_PARTICIPANTS_MAX = 40;
+const MOVEMENT_UNIT_OPTIONS: MovementUnit[] = ['reps', 'laps', 'cals', 'meters', 'seconds', 'rounds'];
 
 type GradientPreset = {
   name: string;
@@ -165,7 +167,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const router = useRouter();
   const pathname = usePathname();
   const { 
-    customEvents, updateWaveEvents, intervalMinutes, workMinutes, restMinutes, maxParticipants, waves: existingWaves,
+    customEvents, movementUnits, updateWaveEvents, setMovementUnits, intervalMinutes, workMinutes, restMinutes, maxParticipants, waves: existingWaves,
     workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode,
     movementTimingMode, movementIntervals,
     setTimingConfig, setMaxParticipants, setWorkoutTimerConfig, setEventConfig, setAccessPasscode,
@@ -179,6 +181,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const isCreatingNewEvent = selectedEventId === CREATE_NEW_EVENT_OPTION;
 
   const [events, setEvents] = useState<string[]>(customEvents);
+  const [movementUnitsLocal, setMovementUnitsLocal] = useState<Record<string, MovementUnit>>(movementUnits);
   const [newEvent, setNewEvent] = useState('');
   const [interval, setInterval] = useState<number>(intervalMinutes);
   const [work, setWork] = useState<EditableMinutes>(workMinutes);
@@ -266,6 +269,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   // Sync local state whenever store values change
   useEffect(() => {
     setEvents(customEvents);
+    setMovementUnitsLocal(movementUnits);
     setInterval(intervalMinutes);
     setWork(workMinutes);
     setRest(restMinutes);
@@ -280,7 +284,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setPasscode(accessPasscode);
     setPasscodeProtectionEnabledLocal(passcodeProtectionEnabled);
     setFeedbackEnabledLocal(feedbackEnabled);
-  }, [customEvents, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode, passcodeProtectionEnabled, feedbackEnabled]);
+  }, [customEvents, movementUnits, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode, passcodeProtectionEnabled, feedbackEnabled]);
 
   useEffect(() => {
     setMovementIntervalsLocal((prev) => {
@@ -295,6 +299,16 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       return next;
     });
   }, [events, movementIntervals, work, rest]);
+
+  useEffect(() => {
+    setMovementUnitsLocal((prev) => {
+      const next: Record<string, MovementUnit> = {};
+      for (const movementName of events) {
+        next[movementName] = prev[movementName] || movementUnits[movementName] || 'reps';
+      }
+      return next;
+    });
+  }, [events, movementUnits]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -453,6 +467,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
             createdEventId
           );
 
+          await setMovementUnits(movementUnitsLocal, createdEventId);
+
           await updateEventBranding({
             title: createdEventName,
             emojiLeft: brandEmojiLeft.trim(),
@@ -502,6 +518,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       if (eventsChanged) {
         await updateWaveEvents(events, saveEventId);
       }
+      await setMovementUnits(movementUnitsLocal, saveEventId);
 
       await setTimingConfig(
         Math.max(1, Math.round(interval)),
@@ -573,14 +590,25 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   };
 
   const handleAddEvent = () => {
-    if (newEvent.trim() && !events.includes(newEvent.trim())) {
-      setEvents([...events, newEvent.trim()]);
+    const nextName = newEvent.trim();
+    if (nextName && !events.includes(nextName)) {
+      setEvents([...events, nextName]);
+      setMovementUnitsLocal((prev) => ({
+        ...prev,
+        [nextName]: prev[nextName] || 'reps',
+      }));
       setNewEvent('');
     }
   };
 
   const handleRemoveEvent = (index: number) => {
+    const targetName = events[index];
     setEvents(events.filter((_, i) => i !== index));
+    setMovementUnitsLocal((prev) => {
+      const next = { ...prev };
+      delete next[targetName];
+      return next;
+    });
   };
 
   const handleMoveUp = (index: number) => {
@@ -1254,11 +1282,37 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                     value={movementName}
                     onChange={(e) => {
                       const nextName = e.target.value;
+                      const prevName = movementName;
                       setEvents((prev) => prev.map((name, nameIndex) => (nameIndex === index ? nextName : name)));
+                      setMovementUnitsLocal((prev) => {
+                        const next = { ...prev };
+                        const prevUnit = next[prevName] || 'reps';
+                        delete next[prevName];
+                        if (nextName.trim()) {
+                          next[nextName] = next[nextName] || prevUnit;
+                        }
+                        return next;
+                      });
                     }}
                     className={`w-full min-w-0 h-9 px-3 border rounded-md text-sm text-gray-900 bg-white input-focus-brand ${duplicateName ? 'border-red-300' : 'border-gray-300'}`}
                     aria-label={`Movement name ${index + 1}`}
                   />
+                  <select
+                    value={movementUnitsLocal[movementName] || 'reps'}
+                    onChange={(e) => {
+                      const nextUnit = e.target.value as MovementUnit;
+                      setMovementUnitsLocal((prev) => ({
+                        ...prev,
+                        [movementName]: nextUnit,
+                      }));
+                    }}
+                    className="h-9 w-24 shrink-0 rounded-md border border-gray-300 bg-white px-2 text-sm input-focus-brand"
+                    aria-label={`Score unit for ${movementName}`}
+                  >
+                    {MOVEMENT_UNIT_OPTIONS.map((unit) => (
+                      <option key={unit} value={unit}>{unit}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex flex-nowrap items-center justify-end gap-2 shrink-0">
                   {movementTimingModeLocal === 'individual' && (
