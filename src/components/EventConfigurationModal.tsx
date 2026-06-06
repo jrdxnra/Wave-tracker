@@ -168,7 +168,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="neutral-focus-scope fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <PasscodeProtection requiredPasscode={accessPasscode}>
         <div ref={modalRef} className="bg-white rounded-lg shadow-xl max-w-2xl w-full my-8 flex flex-col max-h-[90vh]">
           <div className="flex justify-between items-center p-6 border-b border-gray-200 flex-shrink-0">
@@ -202,7 +202,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
                           router.push('/');
                         }
                       }}
-                      className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                      className="input-focus-brand w-full p-2 border border-gray-300 rounded-md bg-white"
                     >
                       {eventsCatalog.map((event) => (
                         <option key={event.id} value={event.id}>{event.name}</option>
@@ -228,7 +228,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
                       onChange={(e) => setNewEventName(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleCreateEvent()}
                       placeholder="Event name"
-                      className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      className="input-focus-brand flex-1 p-2 border border-gray-300 rounded-md"
                     />
                     <button
                       onClick={handleCreateEvent}
@@ -251,7 +251,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
                       setIsDirty(true);
                     }}
                     placeholder="Event title"
-                    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="input-focus-brand w-full p-2 border border-gray-300 rounded-md"
                   />
                 </div>
                 <div>
@@ -310,7 +310,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
                       }}
                       onFocus={() => setOpenEmojiPicker('left')}
                       onClick={() => setOpenEmojiPicker('left')}
-                      className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      className="input-focus-brand w-full min-w-0 p-2 border border-gray-300 rounded-md"
                     />
                     {openEmojiPicker === 'left' && (
                       <div className="absolute left-0 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
@@ -335,7 +335,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
                       }}
                       onFocus={() => setOpenEmojiPicker('right')}
                       onClick={() => setOpenEmojiPicker('right')}
-                      className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      className="input-focus-brand w-full min-w-0 p-2 border border-gray-300 rounded-md"
                     />
                     {openEmojiPicker === 'right' && (
                       <div className="absolute left-auto right-0 max-sm:right-2 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">

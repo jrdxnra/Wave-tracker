@@ -17,6 +17,13 @@ interface PrintDashboardProps {
   };
 }
 
+function getPrintLayoutTier(activeParticipantCount: number): 5 | 10 | 15 | 20 {
+  if (activeParticipantCount >= 16) return 20;
+  if (activeParticipantCount >= 11) return 15;
+  if (activeParticipantCount >= 6) return 10;
+  return 5;
+}
+
 export default function PrintDashboard({ wave }: PrintDashboardProps) {
   const {
     customEvents,
@@ -28,15 +35,21 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
     eventBranding,
     themeColors,
   } = useWaveStore();
-  const leftEmoji = eventBranding.emojiLeft?.trim() || '';
-  const rightEmoji = eventBranding.emojiRight?.trim() || '';
 
   const handlePrint = () => {
+    const escapeHtml = (value: string = '') =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
     // Freeze all print data at click-time so output remains consistent.
     const snapshot = {
       title: eventBranding.title,
-      leftEmoji,
-      rightEmoji,
+      emojiLeft: eventBranding.emojiLeft || '',
+      emojiRight: eventBranding.emojiRight || '',
       themeColors: { ...themeColors },
       notes: eventNotes || '',
       workMinutes,
@@ -62,13 +75,40 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
     const waveDisplayName = coachName
       ? `${printWave.name} w/ Coach ${coachName}`
       : printWave.name;
+    const safeTitle = escapeHtml(snapshot.title || 'Wave Tracker');
+    const safeEmojiLeft = escapeHtml(snapshot.emojiLeft || '');
+    const safeEmojiRight = escapeHtml(snapshot.emojiRight || '');
+    const safeWaveDisplayName = escapeHtml(waveDisplayName || printWave.name || 'Wave');
+    const safeStartTime = escapeHtml(printWave.startTime || '');
+    const waveParticipantCount = printWave.participants.length;
+    const layoutTier = getPrintLayoutTier(waveParticipantCount);
+    const configuredParticipantCount = Math.max(layoutTier, waveParticipantCount);
+    const printableParticipants = printWave.participants.slice(0, configuredParticipantCount);
+    const printableRows = Array.from({ length: configuredParticipantCount }, (_, index) => printableParticipants[index] ?? null);
     const printEvents = snapshot.customEvents;
-    // Compute dynamic Name column width based on the average of the longest names
-    const nameLengths = printWave.participants
-      .map(p => (p.name || '').length);
-    const topN = nameLengths.sort((a, b) => b - a).slice(0, 5);
-    const avgChars = topN.length ? topN.reduce((a, b) => a + b, 0) / topN.length : 16;
-    const nameWidthPx = Math.min(200, Math.max(140, Math.round(avgChars * 7.2 + 24)));
+    // Compute dynamic Name column width from the longest visible participant names.
+    const visibleNameLengths = printableRows.map((p) => (p?.name || '').length);
+    const longestVisibleName = visibleNameLengths.reduce((max, len) => Math.max(max, len), 8);
+    const presetLayout = {
+      5: { headerPadding: '18px 18px', titleFontSize: '18pt', startTimeFontSize: '11pt', cellFontSize: '8.6pt', cellHeight: 26, cellPadding: '5px 4px', cellMetaSize: '6pt', notesFontSize: '9.8pt', notesPadding: '14px', notesTitleSize: '11pt', notesLineHeight: '1.33', notesMinHeight: '240px' },
+      10: { headerPadding: '15px 15px', titleFontSize: '17pt', startTimeFontSize: '10pt', cellFontSize: '8.6pt', cellHeight: 26, cellPadding: '5px 4px', cellMetaSize: '6pt', notesFontSize: '9.4pt', notesPadding: '13px', notesTitleSize: '10.2pt', notesLineHeight: '1.31', notesMinHeight: '190px' },
+      15: { headerPadding: '13px 13px', titleFontSize: '16pt', startTimeFontSize: '9pt', cellFontSize: '8.6pt', cellHeight: 26, cellPadding: '5px 4px', cellMetaSize: '6pt', notesFontSize: '9pt', notesPadding: '12px', notesTitleSize: '9.8pt', notesLineHeight: '1.28', notesMinHeight: '150px' },
+      20: { headerPadding: '12px 12px', titleFontSize: '15pt', startTimeFontSize: '8.5pt', cellFontSize: '8.6pt', cellHeight: 26, cellPadding: '5px 4px', cellMetaSize: '6pt', notesFontSize: '8.8pt', notesPadding: '11px', notesTitleSize: '9.6pt', notesLineHeight: '1.25', notesMinHeight: '120px' },
+    } as const;
+    const layout = presetLayout[layoutTier];
+    const nameWidthPx = Math.max(84, Math.min(130, Math.round(longestVisibleName * 6.6 + 14)));
+    const headerPadding = layout.headerPadding;
+    const titleFontSize = layout.titleFontSize;
+    const startTimeFontSize = layout.startTimeFontSize;
+    const cellFontSize = layout.cellFontSize;
+    const cellHeight = layout.cellHeight;
+    const cellPadding = layout.cellPadding;
+    const cellMetaSize = layout.cellMetaSize;
+    const notesFontSize = layout.notesFontSize;
+    const notesPadding = layout.notesPadding;
+    const notesTitleSize = layout.notesTitleSize;
+    const notesLineHeight = layout.notesLineHeight;
+    const notesMinHeight = layout.notesMinHeight;
 
     // Use configured timing values from store
 
@@ -135,344 +175,221 @@ export default function PrintDashboard({ wave }: PrintDashboardProps) {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${snapshot.title} - ${printWave.name}</title>
+          <title>${safeTitle} - ${safeWaveDisplayName}</title>
           <style>
-            body { 
-              margin: 0; 
-              padding: 12px; 
-              font-family: 'Inter', Arial, sans-serif;
-              background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-              font-size: 9pt;
+            body {
+              margin: 0;
+              padding: 10px;
+              font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+              background: linear-gradient(180deg, #edf4fb 0%, #e6eef7 100%);
+              color: #0f172a;
+            }
+            .sheet {
+              background: #ffffff;
+              padding: 8px;
+              min-height: calc(100vh - 20px);
+              display: flex;
+              flex-direction: column;
             }
             .header {
-              text-align: center;
-              margin-bottom: 20px;
-              padding: 20px;
-              background: linear-gradient(135deg, ${snapshot.themeColors.start} 0%, ${snapshot.themeColors.mid} 50%, ${snapshot.themeColors.end} 100%);
-              border-radius: 12px;
+              padding: ${headerPadding};
+              background: linear-gradient(135deg, ${snapshot.themeColors.start} 0%, ${snapshot.themeColors.mid} 52%, ${snapshot.themeColors.end} 100%);
+              border-radius: 8px;
               color: white;
               position: relative;
               overflow: hidden;
             }
-            .header:before {
-              content: '${snapshot.leftEmoji}';
-              position: absolute;
-              top: 10px;
-              left: 20px;
-              font-size: 24pt;
-              opacity: 0.7;
-            }
-            .header:after {
-              content: '${snapshot.rightEmoji}';
-              position: absolute;
-              top: 10px;
-              right: 20px;
-              font-size: 24pt;
-              opacity: 0.7;
-            }
             .title {
-              font-size: 18pt;
-              font-weight: bold;
-              color: white;
-              margin: 0 0 10px 0;
-              text-align: center;
-            }
-            .wave-info {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 20px;
-              background: white;
-              padding: 15px;
-              border-radius: 8px;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-              border-left: 4px solid #6b7280;
-            }
-            .wave-name {
-              font-size: 16pt;
-              font-weight: bold;
-              color: white;
-              text-align: center;
-              margin-top: 5px;
-            }
-            .start-time {
-              font-size: 12pt;
-              color: #1f2937;
-              font-weight: 700;
-            }
-            .participant-card {
-              border: 2px solid #e5e7eb;
-              border-radius: 8px;
-              margin-bottom: 6px;
-              background: white;
-              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-              position: relative;
-            }
-            .participant-card:before {
-              content: '💪';
-              position: absolute;
-              top: -8px;
-              right: 10px;
-              background: white;
-              padding: 2px 6px;
-              border-radius: 50%;
-              font-size: 12pt;
-              border: 2px solid #6b7280;
-              box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            }
-            .participant-info {
-              background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-              padding: 8px 12px;
-              border-bottom: 2px solid #e5e7eb;
-              border-radius: 6px 6px 0 0;
-              display: flex;
-              justify-content: flex-start;
-              align-items: center;
-              gap: 12px;
-              color: #1f2937;
-            }
-            .participant-name {
-              font-weight: bold;
-              font-size: 11pt;
-              color: #1f2937;
-            }
-            .workout-section {
-              padding: 3px 10px;
-              border-bottom: 1px solid #f1f5f9;
-              font-size: 9pt;
-              color: #374151;
-            }
-            .workout-section:last-child {
-              border-bottom: none;
-              border-radius: 0 0 6px 6px;
-            }
-            .workout-grid {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(75px, 1fr));
-              gap: 1px;
-              margin-top: 2px;
-            }
-            .workout-item {
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              text-align: center;
-              height: 100%;
-              justify-content: space-between;
-            }
-            .workout-label {
-              font-weight: bold;
-              font-size: 7pt;
-              color: #374151;
-              margin-bottom: 2px;
-              text-transform: uppercase;
-              min-height: 18px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              text-align: center;
-              word-wrap: break-word;
-              word-break: break-word;
-              max-width: 75px;
+              margin: 0;
+              font-weight: 800;
+              font-size: ${titleFontSize};
               line-height: 1.1;
             }
-            .workout-value {
-              font-size: 9pt;
-              color: #000;
-              min-height: 10px;
-              border-bottom: 1px solid #d1d5db;
+            .subtitle {
+              margin: 6px 0 0;
+              font-size: ${startTimeFontSize};
+              opacity: 0.96;
+              font-weight: 600;
+            }
+            .print-table {
+              margin-top: 8px;
               width: 100%;
-              text-align: center;
-              margin-top: auto;
+              border-collapse: collapse;
+              table-layout: fixed;
+              border: 1px solid #ccd8e6;
+              border-radius: 7px;
+              overflow: hidden;
+              flex: 1;
             }
-            /* Two-line label when a hyphen is present: first part on line 1, rest on line 2 (kept together) */
-            .hyphen-wrap {
-              display: flex;
-              flex-direction: column;
-              align-items: center;
+            .print-table th,
+            .print-table td {
+              border: 1px solid #ccd8e6;
               text-align: center;
+              vertical-align: middle;
+              color: #0b1a2d;
             }
-            .hyphen-wrap .line2 {
+            .print-table th {
+              background: #f5f9ff;
+              font-weight: 700;
+              font-size: ${cellFontSize};
+              padding: ${cellPadding};
+              height: ${cellHeight}px;
+              line-height: 1.05;
+            }
+            .col-num {
+              width: 18px;
+              background: #f8fbff;
+              font-weight: 700;
+            }
+            .col-name {
+              width: ${nameWidthPx}px;
+              text-align: left;
+              padding-left: 4px !important;
+            }
+            .event-head {
+              font-weight: 800;
+              font-size: ${cellFontSize};
+              line-height: 1.05;
               white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
-            /* Compact table layout (Option A) */
-            .print-table { 
-              width: 100%; 
-              border-collapse: collapse; 
-              table-layout: fixed; 
-              display: table;
-              border: 1px solid #d1d5db;
-            }
-            .print-table thead th { 
-              font-size: 7pt; 
-              text-transform: none; 
-              color: #1f2937; 
-              font-weight: bold; 
-              padding: 4px 6px; 
-              line-height: 1.2;
-              background: #f8fafc;
-              border: 1px solid #d1d5db;
-              text-align: center;
-            }
-            .time-header {
-              font-weight: bold;
-              font-size: 7.5pt;
-            }
-            .print-table thead th:first-child {
-              border-radius: 6px 0 0 0;
-              background: #f8fafc;
-              color: #1f2937;
+            .event-sub {
+              margin-top: 1px;
+              font-size: ${cellMetaSize};
               font-weight: 600;
+              color: #334155;
+              line-height: 1.05;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
-            .print-table thead th:last-child {
-              border-radius: 0 6px 0 0;
+            .print-table tbody td {
+              padding: ${cellPadding};
+              height: ${cellHeight}px;
+              line-height: 1.05;
+              font-size: ${cellFontSize};
             }
-            .print-table th, .print-table td { border: 1px solid #d1d5db; }
-            .print-table tbody td { 
-              padding: 8px 4px; 
-              vertical-align: middle; 
-              line-height: 1.3; 
-              color: #111827;
-              height: 32px;
+            .name {
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              font-weight: 700;
+              font-size: ${cellFontSize};
             }
-            .col-num { width: 22px; text-align: right; color: #6b7280; padding-top: 6px !important; padding-bottom: 6px !important; }
-            .col-name { width: ${nameWidthPx}px; padding-top: 6px !important; padding-bottom: 6px !important; }
-            .name-cell { display: flex; flex-direction: column; justify-content: center; min-height: 24px; }
-            .name-cell .name { font-weight: 700; font-size: 10pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .value { text-align: center; font-size: 9pt; }
-            .header-label { display: flex; flex-direction: column; align-items: center; }
-            .header-label .line2 { white-space: nowrap; }
             .mini-header th {
-              font-size: 7pt; 
-              text-transform: none; 
-              color: #1f2937; 
-              font-weight: 600; 
-              padding: 4px 6px;
-              border: 1px solid #d1d5db;
-              background: #f8fafc;
-              line-height: 1.2;
-              text-align: center;
+              background: #edf5ff;
+              color: #18314a;
+              font-size: ${cellFontSize};
+              font-weight: 700;
+              text-transform: none;
+              letter-spacing: 0;
+              padding: ${cellPadding};
+              height: ${cellHeight}px;
+              line-height: 1.05;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
-            .mini-header th:first-child {
-              background: #f8fafc;
-              color: #1f2937;
-              font-weight: 600;
+            .blank-row td {
+              color: transparent;
             }
             .event-notes {
-              margin-top: 12px;
-              padding: 12px;
-              background: #f8fafc;
-              border: 2px solid #6b7280;
-              border-radius: 8px;
-              page-break-inside: avoid;
-              min-height: 90px;
-              color: #1f2937;
-              position: relative;
+              margin-top: 7px;
+              padding: ${notesPadding};
+              border: 1px solid #cbd5e1;
+              border-radius: 7px;
+              background: #fcfeff;
+              min-height: ${notesMinHeight};
             }
             .event-notes h3 {
-              margin: 0 0 8px 0;
-              font-size: 11pt;
-              font-weight: bold;
-              color: #1f2937;
+              margin: 0 0 4px;
+              font-size: ${notesTitleSize};
+              font-weight: 800;
+              color: #1d4f63;
+              letter-spacing: 0.01em;
             }
-            .event-notes p {
+            .event-notes .event-notes-content {
               margin: 0;
-              font-size: 9pt;
-              color: #1f2937;
-              line-height: 1.4;
+              font-size: ${notesFontSize};
+              line-height: ${notesLineHeight};
+              color: #0f172a;
+              white-space: pre-line;
+              overflow-wrap: anywhere;
             }
             @media print {
-              body { 
-                margin: 0; 
-                padding: 12px;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-                color-adjust: exact;
-              }
-              .header {
+              body {
+                margin: 0;
+                padding: 8px;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
               }
-              .participant-card { box-shadow: none; }
-              thead { display: table-header-group; }
-              .print-table { page-break-inside: auto; }
-              .print-table tr { page-break-inside: avoid; page-break-after: auto; }
-              .event-notes { page-break-before: auto; }
+              .sheet {
+                box-shadow: none;
+                border: none;
+                min-height: calc(100vh - 16px);
+              }
+              .print-table {
+                page-break-inside: auto;
+              }
+              .print-table tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+              }
+              .event-notes {
+                page-break-inside: avoid;
+              }
             }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="title">${snapshot.title} Wave Tracker</div>
-            <div class="wave-name">${waveDisplayName}</div>
-            ${printWave.startTime ? `<div class="start-time">Start Time: ${printWave.startTime}</div>` : ''}
-          </div>
+          <div class="sheet">
+            <div class="header">
+              <div class="title">${safeTitle}${safeEmojiLeft ? ` <span style="font-style: normal;">${safeEmojiLeft}</span>` : ''}</div>
+              <div class="subtitle">${safeWaveDisplayName}${printWave.startTime ? ` • Start ${safeStartTime}` : ''}${safeEmojiRight ? ` <span style="font-style: normal;">${safeEmojiRight}</span>` : ''}</div>
+            </div>
 
-          <table class="print-table">
-            <thead>
-              <tr>
-                <th class="col-num"></th>
-                <th class="col-name" style="font-weight:600;text-transform:none;color:#1f2937;">
-                  ${snapshot.movementTimingMode === 'individual'
-                    ? '<div>&nbsp;</div><div>&nbsp;</div>'
-                    : `<div>Timing: every ${snapshot.workMinutes + snapshot.restMinutes} min</div><div>Work ${snapshot.workMinutes}/ Rest ${snapshot.restMinutes}</div>`}
-                </th>
-                ${movementTimes.map((timing) => `
-                  <th class="time-header">
-                    <div>${timing.startLabel}</div>
-                    ${snapshot.movementTimingMode === 'individual' ? `<div style="font-size:6.5pt;font-weight:600;color:#1d4ed8;">W${timing.workMinutes}/R${timing.restMinutes}</div>` : ''}
-                  </th>
-                `).join('')}
-              </tr>
-              <tr>
-                <th class="col-num">#</th>
-                <th class="col-name">Name</th>
-                ${printEvents.map(event => {
-                  if (event.includes('-')) {
-                    const [first, ...restParts] = event.split('-');
-                    const second = restParts.join('-').trim();
-                    return `<th><span class=\"header-label\"><span>${first}</span><span class=\"line2\">${second}</span></span></th>`;
-                  }
-                  return `<th>${event}</th>`;
+            <table class="print-table">
+              <thead>
+                <tr>
+                  <th class="col-num">#</th>
+                  <th class="col-name">Name</th>
+                  ${printEvents.map((event, eventIdx) => {
+                    const safeEvent = escapeHtml(event);
+                    const timing = movementTimes[eventIdx];
+                    const timingMeta = timing
+                      ? `${escapeHtml(timing.startLabel)}${snapshot.movementTimingMode === 'individual' ? ` • W${timing.workMinutes}/R${timing.restMinutes}` : ''}`
+                      : '';
+                    return `<th><div class="event-head">${safeEvent}</div>${timingMeta ? `<div class="event-sub">${timingMeta}</div>` : ''}</th>`;
+                  }).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${printableRows.map((participant, idx) => {
+                  const miniHeader = (idx > 0 && idx % 5 === 0) ? `
+                    <tr class=\"mini-header\">
+                      <th class=\"col-num\">#</th>
+                      <th class=\"col-name\">Name</th>
+                      ${printEvents.map(event => `<th><div class="event-head">${escapeHtml(event)}</div></th>`).join('')}
+                    </tr>
+                  ` : '';
+
+                  return `
+                    ${miniHeader}
+                    <tr class=\"${participant ? '' : 'blank-row'}\">
+                      <td class=\"col-num\">${idx + 1}</td>
+                      <td class=\"col-name\"><div class=\"name\">${escapeHtml(participant?.name || '')}</div></td>
+                      ${printEvents.map(event => `<td>${escapeHtml((participant?.waveData || {})[event] || '')}</td>`).join('')}
+                    </tr>
+                  `;
                 }).join('')}
-              </tr>
-            </thead>
-            <tbody>
-              ${printWave.participants.slice(0, 15).map((participant, idx) => {
-                const miniHeader = (idx > 0 && idx % 5 === 0) ? `
-                  <tr class=\"mini-header\">
-                    <th class=\"col-num\">#</th>
-                    <th class=\"col-name\">Name</th>
-                    ${printEvents.map(event => {
-                      if (event.includes('-')) {
-                        const [first, ...restParts] = event.split('-');
-                        const second = restParts.join('-').trim();
-                        return `<th><span class=\"header-label\"><span>${first}</span><span class=\"line2\">${second}</span></span></th>`;
-                      }
-                      return `<th>${event}</th>`;
-                    }).join('')}
-                  </tr>
-                ` : '';
+              </tbody>
+            </table>
 
-                return `
-                  ${miniHeader}
-                  <tr>
-                    <td class=\"col-num\">${idx + 1}</td>
-                    <td class=\"col-name\">
-                      <div class=\"name-cell\">
-                        <div class=\"name\">${participant.name || ''}</div>
-                      </div>
-                    </td>
-                    ${printEvents.map(event => `<td class=\"value\">${(participant.waveData || {})[event] || ''}</td>`).join('')}
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-
-          <div class="event-notes">
-            <h3>Event Notes & Details:</h3>
-            <p>${snapshot.notes}</p>
+            <div class="event-notes">
+              <h3>Event Notes</h3>
+              <div class="event-notes-content">${escapeHtml(snapshot.notes)}</div>
+            </div>
           </div>
         </body>
       </html>

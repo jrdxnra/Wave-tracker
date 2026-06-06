@@ -708,8 +708,52 @@ export const useWaveStore = create<WaveStore>()(
           const { db } = getFirebase();
           const waveRef = doc(getEventWavesCollection(db, get().activeEventId), waveId);
           const participantRef = doc(collection(waveRef, 'participants'), participantId);
+          const regRef = doc(db, 'events', get().activeEventId, 'registrations', participantId);
+          const now = new Date().toISOString();
+          const participantSnapshot = await getDoc(participantRef);
+          const participantData = participantSnapshot.exists() ? (participantSnapshot.data() as Partial<Participant> & { rowNumber?: number | null }) : null;
+          const participantName = String(participantData?.name || '').trim() || wave.participants.find((p) => p.id === participantId)?.name || '';
+          const participantRowNumber = Number(participantData?.rowNumber || 0) || null;
           
           await deleteDoc(participantRef);
+
+          await setDoc(regRef, {
+            participantId,
+            registrationStatus: 'Needs Reassignment',
+            confirmedWaveTime: null,
+            updatedAt: now,
+            source: 'manual-ops',
+          }, { merge: true });
+
+          const registrationsSnap = await getDocs(collection(db, 'events', get().activeEventId, 'registrations'));
+          const matchingRegistrationRefs = registrationsSnap.docs.filter((docSnap) => {
+            if (docSnap.id === participantId) return true;
+            const data = docSnap.data() as Record<string, unknown>;
+            return participantName && String(data.name || '').trim() === participantName;
+          });
+
+          await Promise.all(
+            matchingRegistrationRefs.map((docSnap) =>
+              setDoc(docSnap.ref, {
+                participantId: docSnap.id,
+                registrationStatus: 'Needs Reassignment',
+                confirmedWaveTime: null,
+                updatedAt: now,
+                source: 'manual-ops',
+              }, { merge: true })
+            )
+          );
+
+          if (participantRowNumber && participantRowNumber > 1) {
+            const rowRegistrationId = `row-${participantRowNumber}`;
+            await setDoc(doc(db, 'events', get().activeEventId, 'registrations', rowRegistrationId), {
+              participantId: rowRegistrationId,
+              registrationStatus: 'Needs Reassignment',
+              confirmedWaveTime: null,
+              updatedAt: now,
+              source: 'manual-ops',
+            }, { merge: true });
+          }
           
           // Also update the wave document metadata
           await setDoc(waveRef, {

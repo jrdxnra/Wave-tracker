@@ -65,8 +65,7 @@ export default function PasscodeProtection({ children, requiredPasscode }: Passc
                 value={passcode}
                 onChange={(e) => setPasscode(e.target.value)}
                 placeholder="Enter passcode"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent"
-                style={{ boxShadow: 'none' }}
+                className="input-focus-brand w-full px-4 py-3 border border-gray-300 rounded-lg"
                 autoFocus
               />
             </div>

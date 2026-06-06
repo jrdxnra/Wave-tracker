@@ -36,6 +36,24 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
   // Store the last typed value for each field
   const lastTypedValues = useRef<Record<string, string>>({});
 
+  const applySharedFocusStyles = (input: HTMLInputElement) => {
+    input.style.setProperty('border-color', 'var(--shared-focus-color)', 'important');
+    input.style.setProperty(
+      'box-shadow',
+      'inset 0 0 0 1px var(--shared-focus-color), 0 0 0 3px rgb(var(--shared-focus-color-rgb) / 0.22)',
+      'important'
+    );
+    input.style.setProperty('background-color', 'var(--shared-focus-bg)', 'important');
+    input.style.setProperty('outline', 'none', 'important');
+  };
+
+  const clearSharedFocusStyles = (input: HTMLInputElement) => {
+    input.style.removeProperty('border-color');
+    input.style.removeProperty('box-shadow');
+    input.style.removeProperty('background-color');
+    input.style.removeProperty('outline');
+  };
+
   const calculateMovementTimes = () => {
     if (!wave.startTime) return [];
     
@@ -229,6 +247,8 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
                       enterKeyHint="next"
                       value={(participant.waveData || {})[event] || ''}
                       onChange={(e) => handleDataChange(participant.id, event, e.target.value)}
+                      onFocus={(e) => applySharedFocusStyles(e.currentTarget)}
+                      onBlur={(e) => clearSharedFocusStyles(e.currentTarget)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === 'Tab') {
                           e.preventDefault();
@@ -252,7 +272,7 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
                       }}
                       data-participant-index={index}
                       data-event-index={eventIndex}
-                      className="w-full px-2 py-1 border border-gray-300 rounded input-focus-brand"
+                      className="performance-input-focus input-focus-brand w-full px-2 py-1 border border-gray-300 rounded"
                       placeholder=""
                     />
                   </td>
@@ -279,7 +299,10 @@ export default function PerformanceTable({ wave }: PerformanceTableProps) {
           title="Save wave to Firebase"
         >
           {saveState === 'saving' && (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            <div
+              className="animate-spin rounded-full h-4 w-4 border-b-2"
+              style={{ borderBottomColor: 'var(--shared-focus-color)' }}
+            ></div>
           )}
           {saveState === 'saved' && (
             <span className="text-green-200">✓</span>

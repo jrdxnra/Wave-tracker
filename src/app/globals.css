@@ -10,6 +10,9 @@
   --brand-accent-hover: #c2410c;
   --brand-accent-rgb: 234 88 12;
   --brand-accent-hover-rgb: 194 65 12;
+  --shared-focus-color: #fbbf24;
+  --shared-focus-color-rgb: 251 191 36;
+  --shared-focus-bg: #fffbeb;
 }
 
 /* Cosmic Orange-to-Yellow Ombre Theme */
@@ -195,14 +198,55 @@ body:before {
   background: linear-gradient(135deg, var(--brand-accent-hover), var(--brand-end));
 }
 
-.input-focus-brand {
+.input-focus-brand,
+.performance-input-focus {
+  appearance: none;
+  -webkit-appearance: none;
+  background-clip: padding-box;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.input-focus-brand:focus {
-  outline: none;
-  border-color: var(--brand-accent);
-  box-shadow: 0 0 0 2px rgb(var(--brand-accent-rgb) / 0.28);
+:root {
+  --neutral-focus-color: #9ca3af;
+  --neutral-focus-color-rgb: 156 163 175;
+}
+
+.input-focus-brand:focus,
+.input-focus-brand:focus-visible,
+.performance-input-focus:focus,
+.performance-input-focus:focus-visible {
+  outline: none !important;
+  border-color: var(--shared-focus-color) !important;
+  box-shadow: inset 0 0 0 1px var(--shared-focus-color), 0 0 0 3px rgb(var(--shared-focus-color-rgb) / 0.22) !important;
+  background-color: var(--shared-focus-bg) !important;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='color']):focus,
+input:not([type='checkbox']):not([type='radio']):not([type='color']):focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+  outline: none !important;
+  border-color: var(--shared-focus-color) !important;
+  box-shadow: inset 0 0 0 1px var(--shared-focus-color), 0 0 0 3px rgb(var(--shared-focus-color-rgb) / 0.22) !important;
+  background-color: var(--shared-focus-bg) !important;
+}
+
+.neutral-focus-scope .input-focus-brand:focus,
+.neutral-focus-scope .input-focus-brand:focus-visible,
+.neutral-focus-scope .performance-input-focus:focus,
+.neutral-focus-scope .performance-input-focus:focus-visible,
+.neutral-focus-scope input:not([type='checkbox']):not([type='radio']):not([type='color']):focus,
+.neutral-focus-scope input:not([type='checkbox']):not([type='radio']):not([type='color']):focus-visible,
+.neutral-focus-scope textarea:focus,
+.neutral-focus-scope textarea:focus-visible,
+.neutral-focus-scope select:focus,
+.neutral-focus-scope select:focus-visible {
+  outline: none !important;
+  border-color: var(--neutral-focus-color) !important;
+  box-shadow: inset 0 0 0 1px var(--neutral-focus-color), 0 0 0 3px rgb(var(--neutral-focus-color-rgb) / 0.16) !important;
+  background-color: #fff !important;
 }
 
 /* Print Only */

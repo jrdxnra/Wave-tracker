@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { useWaveStore } from '@/store/waveStore';
 import PasscodeProtection from '@/components/PasscodeProtection';
+import { getFirebase } from '@/lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 function escapeCsvValue(value: string | number): string {
   const stringValue = String(value ?? '');
@@ -17,6 +19,8 @@ function escapeCsvValue(value: string | number): string {
 type BrandTheme = 'orange' | 'blue' | 'emerald' | 'sunset';
 const CREATE_NEW_EVENT_OPTION = '__create_new_event__';
 const DEFAULT_EVENT_ID = 'g-rox';
+const MAX_PARTICIPANTS_MIN = 1;
+const MAX_PARTICIPANTS_MAX = 40;
 
 type GradientPreset = {
   name: string;
@@ -27,6 +31,11 @@ type GradientPreset = {
 
 type EditableMinutes = number | '';
 type EditableMovementIntervals = Record<string, { workMinutes: EditableMinutes; restMinutes: EditableMinutes }>;
+
+function normalizeMaxParticipants(value: number): number {
+  if (!Number.isFinite(value)) return MAX_PARTICIPANTS_MIN;
+  return Math.max(MAX_PARTICIPANTS_MIN, Math.min(MAX_PARTICIPANTS_MAX, Math.round(value)));
+}
 
 const THEME_GRADIENT_PRESETS: Record<BrandTheme, { start: string; mid: string; end: string }> = {
   orange: { start: '#ea580c', mid: '#f97316', end: '#fbbf24' },
@@ -83,6 +92,68 @@ function normalizeMovementIntervals(
   );
 }
 
+function parseTimeToMinutes(value: string): number | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  const ampmMatch = raw.match(/^(\d{1,2}):(\d{2})\s*([aApP][mM])$/);
+  if (ampmMatch) {
+    let hour = Number(ampmMatch[1]);
+    const minute = Number(ampmMatch[2]);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+    const meridiem = ampmMatch[3].toUpperCase();
+
+    if (hour === 12) {
+      hour = meridiem === 'AM' ? 0 : 12;
+    } else if (meridiem === 'PM') {
+      hour += 12;
+    }
+
+    return hour * 60 + minute;
+  }
+
+  const hmMatch = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (hmMatch) {
+    const hour = Number(hmMatch[1]);
+    const minute = Number(hmMatch[2]);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+    return hour * 60 + minute;
+  }
+
+  return null;
+}
+
+function formatMinutesToLabel(totalMinutes: number): string {
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+  const h24 = Math.floor(normalized / 60);
+  const mins = normalized % 60;
+  const meridiem = h24 >= 12 ? 'PM' : 'AM';
+  let h12 = h24 % 12;
+  if (h12 === 0) h12 = 12;
+  return `${h12}:${String(mins).padStart(2, '0')} ${meridiem}`;
+}
+
+function buildWaveTimes(startTime: string, totalWaves: number, intervalMinutes: number): string[] {
+  const startMinutes = parseTimeToMinutes(startTime);
+  if (startMinutes === null) return [];
+  if (!Number.isFinite(totalWaves) || totalWaves <= 0) return [];
+  if (!Number.isFinite(intervalMinutes) || intervalMinutes <= 0) return [];
+
+  const count = Math.floor(totalWaves);
+  const interval = Math.floor(intervalMinutes);
+  const times: string[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    times.push(formatMinutesToLabel(startMinutes + index * interval));
+  }
+
+  return times;
+}
+
+function waveIdFromTime(label: string): string {
+  return `wave-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
 interface ConfigurationModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -94,7 +165,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const router = useRouter();
   const pathname = usePathname();
   const { 
-    customEvents, updateWaveEvents, intervalMinutes, workMinutes, restMinutes, maxParticipants, 
+    customEvents, updateWaveEvents, intervalMinutes, workMinutes, restMinutes, maxParticipants, waves: existingWaves,
     workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode,
     movementTimingMode, movementIntervals,
     setTimingConfig, setMaxParticipants, setWorkoutTimerConfig, setEventConfig, setAccessPasscode,
@@ -114,7 +185,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [rest, setRest] = useState<EditableMinutes>(restMinutes);
   const [movementTimingModeLocal, setMovementTimingModeLocal] = useState<'global' | 'individual'>(movementTimingMode);
   const [movementIntervalsLocal, setMovementIntervalsLocal] = useState<EditableMovementIntervals>(movementIntervals);
-  const [maxParticipantsLocal, setMaxParticipantsLocal] = useState<number>(maxParticipants);
+  const [maxParticipantsLocal, setMaxParticipantsLocal] = useState<number>(normalizeMaxParticipants(maxParticipants));
   const [timerWorkSeconds, setTimerWorkSeconds] = useState<number>(workoutTimerWorkSeconds);
   const [timerRestSeconds, setTimerRestSeconds] = useState<number>(workoutTimerRestSeconds);
   const [startDate, setStartDate] = useState<string>(eventStartDate);
@@ -123,6 +194,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [passcode, setPasscode] = useState<string>(accessPasscode);
   const [passcodeProtectionEnabledLocal, setPasscodeProtectionEnabledLocal] = useState<boolean>(passcodeProtectionEnabled);
   const [feedbackEnabledLocal, setFeedbackEnabledLocal] = useState<boolean>(feedbackEnabled);
+  const [pinnedFormUrl, setPinnedFormUrl] = useState('');
+  const [pinnedSheetUrl, setPinnedSheetUrl] = useState('');
 
   const [newEventName, setNewEventName] = useState('');
   const [newEventMovementTimingMode, setNewEventMovementTimingMode] = useState<'global' | 'individual'>('global');
@@ -141,14 +214,30 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [openEmojiPicker, setOpenEmojiPicker] = useState<'left' | 'right' | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
+  const [isCreatingWaves, setIsCreatingWaves] = useState(false);
   const [isDownloadingFeedback, setIsDownloadingFeedback] = useState(false);
   const [isUpdatingPasscodeToggle, setIsUpdatingPasscodeToggle] = useState(false);
   const [isUpdatingFeedbackToggle, setIsUpdatingFeedbackToggle] = useState(false);
   const [isSwitchingEvent, setIsSwitchingEvent] = useState(false);
   const [isHydratingConfig, setIsHydratingConfig] = useState(false);
   const [isAddButtonHover, setIsAddButtonHover] = useState(false);
-  const [isEventSelectFocused, setIsEventSelectFocused] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+
+  const expectedWaveTimes = useMemo(() => buildWaveTimes(startTime, waves, interval), [startTime, waves, interval]);
+  const existingWaveTimes = useMemo(() => {
+    return Array.from(
+      new Set(
+        Object.values(existingWaves)
+          .map((wave) => String(wave.startTime || '').trim())
+          .filter(Boolean)
+      )
+    );
+  }, [existingWaves]);
+  const missingWaveTimes = useMemo(
+    () => expectedWaveTimes.filter((time) => !existingWaveTimes.includes(time)),
+    [expectedWaveTimes, existingWaveTimes]
+  );
+  const waveScheduleReady = Boolean(startDate && startTime && Number.isFinite(waves) && waves > 0 && Number.isFinite(interval) && interval > 0);
 
   // Load fresh config from Firebase when modal opens and sync local state
   useEffect(() => {
@@ -182,7 +271,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setRest(restMinutes);
     setMovementTimingModeLocal(movementTimingMode);
     setMovementIntervalsLocal(movementIntervals);
-    setMaxParticipantsLocal(maxParticipants);
+    setMaxParticipantsLocal(normalizeMaxParticipants(maxParticipants));
     setTimerWorkSeconds(workoutTimerWorkSeconds);
     setTimerRestSeconds(workoutTimerRestSeconds);
     setStartDate(eventStartDate);
@@ -220,6 +309,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       setGradientEnd(defaultGradient.end);
       setNewEventName('');
       setNewEventMovementTimingMode('global');
+      setPinnedFormUrl('');
+      setPinnedSheetUrl('');
     } else {
       setSelectedEventId(activeEventId);
       setBrandTitle(eventBranding.title);
@@ -231,6 +322,102 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       setGradientEnd(eventBranding.customGradient?.end || defaultGradient.end);
     }
   }, [isOpen, activeEventId, eventBranding, movementTimingMode, isCreatingNewEvent]);
+
+  useEffect(() => {
+    if (!isOpen || isCreatingNewEvent) return;
+
+    let cancelled = false;
+    const targetEventId = selectedEventId === CREATE_NEW_EVENT_OPTION ? activeEventId : selectedEventId;
+
+    void (async () => {
+      try {
+        const { db } = getFirebase();
+        const configRef = doc(db, 'events', targetEventId, 'config', 'global');
+        const configSnap = await getDoc(configRef);
+        if (cancelled) return;
+
+        const links = configSnap.exists() ? configSnap.data().integrationLinks || {} : {};
+        setPinnedFormUrl(typeof links.formUrl === 'string' ? links.formUrl : '');
+        setPinnedSheetUrl(typeof links.sheetUrl === 'string' ? links.sheetUrl : '');
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load integration links:', error);
+          setPinnedFormUrl('');
+          setPinnedSheetUrl('');
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, isCreatingNewEvent, selectedEventId, activeEventId]);
+
+  const savePinnedIntegrationLinks = async (eventId: string) => {
+    const { db } = getFirebase();
+    const configRef = doc(db, 'events', eventId, 'config', 'global');
+    await setDoc(configRef, {
+      integrationLinks: {
+        formUrl: pinnedFormUrl.trim(),
+        sheetUrl: pinnedSheetUrl.trim(),
+      },
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+  };
+
+  const handleCreateConfiguredWaves = async () => {
+    if (!waveScheduleReady) {
+      alert('Enter event start date, event start time, total waves, and wave interval first.');
+      return;
+    }
+
+    if (isSwitchingEvent || isHydratingConfig) return;
+
+    setIsCreatingWaves(true);
+    try {
+      const saveEventId = selectedEventId === CREATE_NEW_EVENT_OPTION ? activeEventId : selectedEventId;
+      if (!saveEventId || saveEventId === CREATE_NEW_EVENT_OPTION) {
+        throw new Error('Select a real event before creating waves.');
+      }
+
+      await setTimingConfig(
+        Math.max(1, Math.round(interval)),
+        normalizeMinutes(work),
+        normalizeMinutes(rest),
+        movementTimingModeLocal,
+        normalizeMovementIntervals(movementIntervalsLocal, work, rest),
+        saveEventId
+      );
+      await setEventConfig(startDate, startTime, Math.max(1, Math.round(waves)), saveEventId);
+      await setMaxParticipants(maxParticipantsLocal, saveEventId);
+
+      const { db } = getFirebase();
+      const now = new Date().toISOString();
+
+      await Promise.all(
+        expectedWaveTimes.map((time) =>
+          setDoc(doc(db, 'events', saveEventId, 'waves', waveIdFromTime(time)), {
+            id: waveIdFromTime(time),
+            name: `Wave ${time}`,
+            startTime: time,
+            coach: '',
+            updatedAt: now,
+            createdBy: 'configuration-modal',
+          }, { merge: true })
+        )
+      );
+
+      alert(missingWaveTimes.length > 0
+        ? `Created ${expectedWaveTimes.length} wave(s). ${missingWaveTimes.length} were newly added.`
+        : `All ${expectedWaveTimes.length} wave(s) already exist.`
+      );
+    } catch (error) {
+      console.error('❌ Failed to create waves:', error);
+      alert(error instanceof Error ? error.message : 'Failed to create waves.');
+    } finally {
+      setIsCreatingWaves(false);
+    }
+  };
 
   const handleSave = async () => {
     if (isSwitchingEvent || isHydratingConfig) return;
@@ -292,6 +479,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         await setAccessPasscode(passcode.trim());
         await setPasscodeProtectionEnabled(passcodeProtectionEnabledLocal);
         await setFeedbackEnabled(feedbackEnabledLocal, createdEventId);
+        if (createdEventId) {
+          await savePinnedIntegrationLinks(createdEventId);
+        }
         onClose();
         return;
       }
@@ -338,6 +528,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           end: normalizeHexColor(gradientEnd, getDefaultGradient(eventBranding.theme).end),
         },
       }, saveEventId);
+
+      await savePinnedIntegrationLinks(saveEventId);
 
       onClose();
     } catch (error) {
@@ -530,6 +722,25 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     }
   };
 
+  const getAppOrigin = () => {
+    if (typeof window === 'undefined') return '';
+    return window.location.origin;
+  };
+
+  const copyToClipboard = async (value: string, label: string) => {
+    try {
+      if (!value) {
+        alert(`${label} is unavailable in this environment.`);
+        return;
+      }
+      await navigator.clipboard.writeText(value);
+      alert(`${label} copied.`);
+    } catch (error) {
+      console.error(`Failed to copy ${label}:`, error);
+      alert(`Failed to copy ${label}.`);
+    }
+  };
+
   const renderGradientPresetPicker = () => (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">Quick Theme Presets</label>
@@ -679,7 +890,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 onChange={(e) => setPasscode(e.target.value)}
                 placeholder="Enter passcode"
                 disabled={!passcodeProtectionEnabledLocal}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                className="w-full p-2 border border-gray-300 rounded-md input-focus-brand"
               />
             </div>
           </div>
@@ -730,6 +941,96 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         </div>
 
         <div>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-lg font-medium text-gray-900">Pinned Form + Sheet Links</h3>
+            {renderInfoTip(
+              'Store the Google Form URL and Google Sheet URL for this event so staff can quickly open both from inside the app.',
+              'Form and Sheet integration information'
+            )}
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
+            <p className="text-xs text-gray-600">
+              Active Event ID: <span className="font-semibold text-gray-800">{activeEventId}</span>
+            </p>
+
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Google Form URL</label>
+                <input
+                  type="url"
+                  value={pinnedFormUrl}
+                  onChange={(e) => setPinnedFormUrl(e.target.value)}
+                  placeholder="https://docs.google.com/forms/..."
+                  className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Google Sheet URL</label>
+                <input
+                  type="url"
+                  value={pinnedSheetUrl}
+                  onChange={(e) => setPinnedSheetUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/..."
+                  className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pinnedFormUrl.trim()) {
+                      window.open(pinnedFormUrl.trim(), '_blank', 'noopener,noreferrer');
+                    }
+                  }}
+                  disabled={!pinnedFormUrl.trim()}
+                  className="rounded-md px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: themeColors.accent }}
+                >
+                  Open Form
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void copyToClipboard(pinnedFormUrl.trim(), 'Google Form URL');
+                  }}
+                  disabled={!pinnedFormUrl.trim()}
+                  className="rounded-md px-3 py-2 text-xs font-semibold text-gray-800 border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Copy Form URL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pinnedSheetUrl.trim()) {
+                      window.open(pinnedSheetUrl.trim(), '_blank', 'noopener,noreferrer');
+                    }
+                  }}
+                  disabled={!pinnedSheetUrl.trim()}
+                  className="rounded-md px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: themeColors.accent }}
+                >
+                  Open Sheet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void copyToClipboard(pinnedSheetUrl.trim(), 'Google Sheet URL');
+                  }}
+                  disabled={!pinnedSheetUrl.trim()}
+                  className="rounded-md px-3 py-2 text-xs font-semibold text-gray-800 border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Copy Sheet URL
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div>
           <h3 className="text-lg font-medium text-gray-900 mb-3">Danger Zone</h3>
           <div className="rounded-lg border border-red-200 bg-red-50 p-3">
             <p className="text-sm text-red-700 mb-3">Delete the currently selected event and all associated data.</p>
@@ -768,7 +1069,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
             />
           </div>
           <div>
@@ -777,7 +1078,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
-              className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
             />
           </div>
         </div>
@@ -790,29 +1091,51 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               min={1}
               value={waves}
               onChange={(e) => setWaves(parseInt(e.target.value || '1', 10))}
-              className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+              className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
             />
           </div>
           <div className="min-w-0 flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">Max Participants</label>
             <select
               value={maxParticipantsLocal}
-              onChange={(e) => setMaxParticipantsLocal(parseInt(e.target.value))}
-              className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)] bg-white"
+              onChange={(e) => setMaxParticipantsLocal(parseInt(e.target.value, 10))}
+              className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand bg-white"
             >
-              <option value={5}>5</option>
-              <option value={6}>6</option>
-              <option value={7}>7</option>
-              <option value={8}>8</option>
-              <option value={9}>9</option>
-              <option value={10}>10</option>
-              <option value={11}>11</option>
-              <option value={12}>12</option>
-              <option value={13}>13</option>
-              <option value={14}>14</option>
-              <option value={15}>15</option>
+              {Array.from({ length: MAX_PARTICIPANTS_MAX - MAX_PARTICIPANTS_MIN + 1 }, (_, index) => {
+                const value = MAX_PARTICIPANTS_MIN + index;
+                return (
+                  <option key={value} value={value}>{value}</option>
+                );
+              })}
             </select>
           </div>
+        </div>
+
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+          <div>
+            <div className="text-sm font-semibold text-gray-900">Create Waves</div>
+            <div className="text-xs text-gray-600">
+              Creates the wave docs from start date, start time, total waves, and interval.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              void handleCreateConfiguredWaves();
+            }}
+            disabled={!waveScheduleReady || isCreatingWaves || isSwitchingEvent || isHydratingConfig}
+            className={`rounded-md px-4 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              waveScheduleReady ? 'hover:brightness-110' : ''
+            }`}
+            style={{ backgroundColor: waveScheduleReady ? themeColors.accent : '#9ca3af' }}
+          >
+            {isCreatingWaves
+              ? 'Creating...'
+              : missingWaveTimes.length > 0
+                ? `Create / Sync Waves (${missingWaveTimes.length} missing)`
+                : `Waves Ready (${expectedWaveTimes.length})`
+            }
+          </button>
         </div>
 
         {movementTimingModeLocal === 'global' && (
@@ -824,7 +1147,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 min={1}
                 value={interval}
                 onChange={(e) => setInterval(parseInt(e.target.value || '1', 10))}
-                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
               />
             </div>
             <div>
@@ -835,7 +1158,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 value={work}
                 onChange={(e) => setWork(parseEditableMinutes(e.target.value))}
                 onBlur={() => setWork((current) => normalizeMinutes(current))}
-                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
               />
             </div>
             <div>
@@ -846,7 +1169,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 value={rest}
                 onChange={(e) => setRest(parseEditableMinutes(e.target.value))}
                 onBlur={() => setRest((current) => normalizeMinutes(current))}
-                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
               />
             </div>
           </div>
@@ -869,7 +1192,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 onChange={(e) => setNewEvent(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddEvent()}
                 placeholder="Type movement name and press Enter"
-                className="block w-full min-w-0 h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                className="block w-full min-w-0 h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
               />
             </div>
             <button
@@ -933,7 +1256,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                       const nextName = e.target.value;
                       setEvents((prev) => prev.map((name, nameIndex) => (nameIndex === index ? nextName : name)));
                     }}
-                    className={`w-full min-w-0 h-9 px-3 border rounded-md text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)] ${duplicateName ? 'border-red-300' : 'border-gray-300'}`}
+                    className={`w-full min-w-0 h-9 px-3 border rounded-md text-sm text-gray-900 bg-white input-focus-brand ${duplicateName ? 'border-red-300' : 'border-gray-300'}`}
                     aria-label={`Movement name ${index + 1}`}
                   />
                 </div>
@@ -964,7 +1287,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                             },
                           }));
                         }}
-                        className="w-12 sm:w-14 h-9 px-1 sm:px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                        className="w-12 sm:w-14 h-9 px-1 sm:px-2 shrink-0 border border-gray-300 rounded-md text-sm input-focus-brand"
                         aria-label={`Work minutes for ${movementName}`}
                       />
                       <span className="text-xs font-medium text-gray-500">R</span>
@@ -991,7 +1314,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                             },
                           }));
                         }}
-                        className="w-12 sm:w-14 h-9 px-1 sm:px-2 shrink-0 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                        className="w-12 sm:w-14 h-9 px-1 sm:px-2 shrink-0 border border-gray-300 rounded-md text-sm input-focus-brand"
                         aria-label={`Rest minutes for ${movementName}`}
                       />
                     </div>
@@ -1048,7 +1371,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   setBrandTitle(e.target.value);
                 }}
                 placeholder="Event name"
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                className="w-full p-2 border border-gray-300 rounded-md input-focus-brand"
                 required
               />
             </div>
@@ -1057,7 +1380,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               <select
                 value={newEventMovementTimingMode}
                 onChange={(e) => setNewEventMovementTimingMode(e.target.value as 'global' | 'individual')}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)] bg-white"
+                className="w-full p-2 border border-gray-300 rounded-md input-focus-brand bg-white"
                 required
               >
                 <option value="global">Global Interval</option>
@@ -1105,7 +1428,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   onChange={(e) => setBrandEmojiLeft(e.target.value)}
                   onFocus={() => setOpenEmojiPicker('left')}
                   onClick={() => setOpenEmojiPicker('left')}
-                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md input-focus-brand"
                 />
                 {openEmojiPicker === 'left' && (
                   <div className="absolute left-0 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
@@ -1127,7 +1450,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   onChange={(e) => setBrandEmojiRight(e.target.value)}
                   onFocus={() => setOpenEmojiPicker('right')}
                   onClick={() => setOpenEmojiPicker('right')}
-                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md input-focus-brand"
                 />
                 {openEmojiPicker === 'right' && (
                   <div className="absolute left-auto right-0 max-sm:right-2 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
@@ -1158,7 +1481,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   type="text"
                   value={brandTitle}
                   onChange={(e) => setBrandTitle(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                  className="w-full p-2 border border-gray-300 rounded-md input-focus-brand"
                   required
                 />
               </div>
@@ -1229,7 +1552,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   onChange={(e) => setBrandEmojiLeft(e.target.value)}
                   onFocus={() => setOpenEmojiPicker('left')}
                   onClick={() => setOpenEmojiPicker('left')}
-                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md input-focus-brand"
                 />
                 {openEmojiPicker === 'left' && (
                   <div className="absolute left-0 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
@@ -1251,7 +1574,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   onChange={(e) => setBrandEmojiRight(e.target.value)}
                   onFocus={() => setOpenEmojiPicker('right')}
                   onClick={() => setOpenEmojiPicker('right')}
-                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)]"
+                  className="w-full min-w-0 p-2 border border-gray-300 rounded-md input-focus-brand"
                 />
                 {openEmojiPicker === 'right' && (
                   <div className="absolute left-auto right-0 max-sm:right-2 z-20 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg w-[min(92vw,340px)]">
@@ -1275,13 +1598,13 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="neutral-focus-scope fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <PasscodeProtection requiredPasscode={accessPasscode}>
         <div ref={modalRef} className="bg-white rounded-lg shadow-xl max-w-3xl w-full my-8 flex flex-col max-h-[90vh]">
           {/* Header - Fixed */}
           <div
             className="p-4 sm:p-6 pb-0 flex-shrink-0 bg-white"
-            style={{ ['--accent-color' as string]: themeColors.accent }}
+            style={{ ['--accent-color' as string]: '#9ca3af' }}
           >
             <div className="flex flex-row flex-nowrap items-center gap-x-2 pb-0">
               <h2 className="text-2xl font-semibold text-gray-900">Configuration</h2>
@@ -1309,12 +1632,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                       setIsSwitchingEvent(false);
                     }
                   }}
-                  onFocus={() => setIsEventSelectFocused(true)}
-                  onBlur={() => setIsEventSelectFocused(false)}
-                  className="w-full sm:w-auto p-2 border rounded-md focus:outline-none bg-white text-sm min-w-[180px] transition-shadow"
+                  className="input-focus-brand w-full sm:w-auto p-2 border rounded-md bg-white text-sm min-w-[180px] transition-shadow"
                   style={{
-                    borderColor: themeColors.accent,
-                    boxShadow: isEventSelectFocused ? `0 0 0 2px ${themeColors.accent}` : undefined,
+                    borderColor: '#d1d5db',
                   }}
                 >
                   {eventsCatalog.map((event) => (

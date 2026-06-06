@@ -19,8 +19,12 @@ interface WaveQuickViewCardProps {
   };
 }
 
+function waveIdFromTime(label: string): string {
+  return `wave-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
 export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
-  const { deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, updateParticipantLeaderboardStatus, themeColors } = useWaveStore();
+  const { deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, themeColors } = useWaveStore();
   const accent = themeColors.accent;
   const accentHover = themeColors.accentHover;
   const [newName, setNewName] = useState('');
@@ -107,9 +111,12 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
     }
   };
 
+  const isManualWaveEntry = (participantId: string) => participantId.startsWith('p-');
+
 
   return (
     <div
+      id={wave.startTime ? waveIdFromTime(wave.startTime) : `wave-card-${wave.id}`}
       className="bg-white p-6 rounded-lg shadow-lg border border-gray-200"
       style={{
         borderLeft: `6px solid ${accent}`,
@@ -125,7 +132,7 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
             onChange={(e) => setEditingName(e.target.value)}
             onBlur={handleNameSave}
             onKeyDown={handleNameKeyPress}
-            className="text-xl font-semibold text-gray-900 bg-transparent border-b-2 border-[var(--wave-accent)] focus:outline-none focus:border-[var(--wave-accent-hover)]"
+            className="input-focus-brand text-xl font-semibold text-gray-900 bg-transparent border-b-2 border-[var(--wave-accent)]"
             autoFocus
           />
         ) : (
@@ -191,7 +198,7 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
                 const stored = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
                 updateWave(wave.id, { startTime: stored });
               }}
-              className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--wave-accent)] focus:border-[var(--wave-accent)]"
+              className="input-focus-brand p-2 border border-gray-300 rounded-md"
             />
           </div>
           {/* Coach Block (right) */}
@@ -202,7 +209,7 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
               value={wave.coach || ''}
               onChange={e => updateWave(wave.id, { coach: e.target.value })}
               placeholder="Enter coach's name"
-              className="p-2 border border-gray-300 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[var(--wave-accent)] focus:border-[var(--wave-accent)]"
+              className="input-focus-brand p-2 border border-gray-300 rounded-md w-full"
             />
           </div>
         </div>
@@ -219,10 +226,19 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
         <h4 className="text-sm font-medium text-gray-700 mb-2">Participants:</h4>
         <div className="space-y-2 max-h-40 overflow-y-auto">
           {wave.participants.map((participant, index) => (
-            <div key={`${wave.id}-${participant.id}-${index}`} className="space-y-1">
+            <div key={`${wave.id}-${participant.id}-${index}`}>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-900 font-medium">
+                <span className="inline-flex items-center gap-1 text-gray-900 font-medium">
                   {participant.name}
+                  {isManualWaveEntry(participant.id) && (
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-300 bg-amber-100 text-[10px] font-bold text-amber-800"
+                      title="Manual wave entry (not from registration form)"
+                      aria-label="Manual wave entry"
+                    >
+                      *
+                    </span>
+                  )}
                 </span>
                 <button
                   onClick={async () => {
@@ -239,28 +255,6 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
                   ×
                 </button>
               </div>
-              <div className="flex items-center ml-4">
-                <input
-                  type="checkbox"
-                  id={`leaderboard-${wave.id}-${participant.id}`}
-                  checked={participant.includeInLeaderboard !== false}
-                  onChange={async (e) => {
-                    try {
-                      await updateParticipantLeaderboardStatus(wave.id, participant.id, e.target.checked);
-                    } catch (error) {
-                      console.error('Failed to update leaderboard status:', error);
-                    }
-                  }}
-                  className="h-4 w-4 border-gray-300 rounded cursor-pointer focus:ring-[var(--wave-accent)]"
-                  style={{ accentColor: accent }}
-                />
-                <label 
-                  htmlFor={`leaderboard-${wave.id}-${participant.id}`}
-                  className="ml-2 text-xs text-gray-600 cursor-pointer"
-                >
-                  Include in leaderboard
-                </label>
-              </div>
             </div>
           ))}
         </div>
@@ -273,7 +267,7 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--wave-accent)] focus:border-[var(--wave-accent)]"
+          className="input-focus-brand w-full p-2 border border-gray-300 rounded-md"
         />
         <button
           onClick={handleAddParticipant}

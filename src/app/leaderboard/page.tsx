@@ -374,7 +374,7 @@ export default function Leaderboard() {
         <div className="fixed bottom-24 right-4 z-40 w-[calc(100%-1rem)] max-w-sm sm:right-6 sm:w-96">
           <form
             onSubmit={handleFeedbackSubmit}
-            className="rounded-2xl border border-black/5 bg-white/95 p-4 shadow-2xl backdrop-blur"
+            className="neutral-focus-scope rounded-2xl border border-black/5 bg-white/95 p-4 shadow-2xl backdrop-blur"
           >
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -408,8 +408,7 @@ export default function Leaderboard() {
               rows={4}
               maxLength={600}
               placeholder="What worked well, what felt off, or what should change next time?"
-              className="mb-3 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2"
-              style={{ borderColor: '#e5e7eb' }}
+              className="input-focus-brand mb-3 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900"
             />
 
             <div className="flex items-center justify-between gap-3">

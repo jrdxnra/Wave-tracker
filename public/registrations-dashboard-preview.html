@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wave Tracker - Registrations Dashboard Preview</title>
+  <style>
+    :root {
+      --bg-1: #f7f4ee;
+      --bg-2: #fffdf7;
+      --ink: #1e1a15;
+      --muted: #665f55;
+      --card: #ffffff;
+      --line: #e8dfd1;
+      --accent: #0f766e;
+      --accent-2: #d97706;
+      --danger: #b91c1c;
+      --ok: #166534;
+      --wait: #92400e;
+      --shadow: 0 10px 30px rgba(31, 24, 18, 0.09);
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "DM Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 10%, rgba(15, 118, 110, 0.12), transparent 28%),
+        radial-gradient(circle at 90% 15%, rgba(217, 119, 6, 0.12), transparent 35%),
+        linear-gradient(180deg, var(--bg-1), var(--bg-2));
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px 40px;
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .hero,
+    .queue {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .hero h1 {
+      margin: 0 0 6px;
+      font-size: 1.45rem;
+      letter-spacing: 0.2px;
+    }
+
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .metrics {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fff;
+    }
+
+    .metric .k {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .metric .v {
+      margin-top: 4px;
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    .queue h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .queue ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr auto;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .field,
+    .btn {
+      height: 42px;
+      border-radius: 11px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      padding: 0 12px;
+      font-size: 0.92rem;
+    }
+
+    .btn {
+      border: 1px solid #0f766e;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .btn.secondary {
+      border-color: #d97706;
+      background: var(--accent-2);
+    }
+
+    .board {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+
+    thead th {
+      text-align: left;
+      background: #faf7f1;
+      color: #4d463d;
+      border-bottom: 1px solid var(--line);
+      padding: 11px 12px;
+      font-size: 0.75rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tbody td {
+      padding: 12px;
+      border-bottom: 1px solid #f0e7db;
+      vertical-align: middle;
+    }
+
+    tbody tr:hover {
+      background: #fffdf8;
+    }
+
+    .name {
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+
+    .email {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      border: 1px solid;
+    }
+
+    .chip.confirmed { background: #ecfdf3; color: var(--ok); border-color: #86efac; }
+    .chip.pending { background: #eff6ff; color: #1e40af; border-color: #93c5fd; }
+    .chip.waitlisted { background: #fffbeb; color: var(--wait); border-color: #fcd34d; }
+    .chip.cancelled { background: #fef2f2; color: var(--danger); border-color: #fca5a5; }
+
+    .actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .mini {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 9px;
+      font-size: 0.78rem;
+      padding: 6px 8px;
+      cursor: pointer;
+    }
+
+    .mini.confirm { border-color: #86efac; }
+    .mini.cancel { border-color: #fca5a5; }
+
+    .foot {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 980px) {
+      .top { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .toolbar { grid-template-columns: 1fr 1fr; }
+      .toolbar .btn { grid-column: span 2; }
+      .board { overflow-x: auto; }
+      table { min-width: 980px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="top">
+      <article class="hero">
+        <h1>Registrations Dashboard</h1>
+        <p class="sub">Live view of Google Form signups, auto-assigned waves, and cancellation sync health.</p>
+        <div class="metrics">
+          <div class="metric"><div class="k">Total</div><div class="v">142</div></div>
+          <div class="metric"><div class="k">Confirmed</div><div class="v">118</div></div>
+          <div class="metric"><div class="k">Waitlisted</div><div class="v">16</div></div>
+          <div class="metric"><div class="k">Pending Queue</div><div class="v">2</div></div>
+        </div>
+      </article>
+      <aside class="queue">
+        <h2>Sync Monitor</h2>
+        <ul>
+          <li>Webhook ingest: healthy (200)</li>
+          <li>Last allocation write-back: 12s ago</li>
+          <li>Cancellation pull sync: every 1 min</li>
+          <li>Last pull run: 7:14:13 PM</li>
+        </ul>
+      </aside>
+    </section>
+
+    <section class="toolbar">
+      <input class="field" placeholder="Search name or email..." />
+      <select class="field">
+        <option>All Statuses</option>
+        <option>Confirmed</option>
+        <option>Pending</option>
+        <option>Waitlisted</option>
+        <option>Cancelled</option>
+      </select>
+      <select class="field">
+        <option>All Waves</option>
+        <option>8:00 AM</option>
+        <option>8:15 AM</option>
+        <option>9:15 AM</option>
+      </select>
+      <button class="btn">Refresh Data</button>
+    </section>
+
+    <section class="board">
+      <table>
+        <thead>
+          <tr>
+            <th>Participant</th>
+            <th>Status</th>
+            <th>Assigned Wave</th>
+            <th>Preferences</th>
+            <th>Portal</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="name">Avery Stone</div>
+              <div class="email">avery@example.com</div>
+            </td>
+            <td><span class="chip confirmed">Confirmed</span></td>
+            <td>9:15 AM</td>
+            <td>1st: 9:00 AM block, :15 exact</td>
+            <td><a href="#">/portal/avery_stone?event=...</a></td>
+            <td>
+              <div class="actions">
+                <button class="mini">Move Wave</button>
+                <button class="mini cancel">Cancel</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="name">Jordan Lee</div>
+              <div class="email">jordan@example.com</div>
+            </td>
+            <td><span class="chip waitlisted">Waitlisted</span></td>
+            <td>-</td>
+            <td>1st: 8:00 AM block, flex 15m</td>
+            <td><a href="#">/portal/jordan_lee?event=...</a></td>
+            <td>
+              <div class="actions">
+                <button class="mini confirm">Force Confirm</button>
+                <button class="mini">Message</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="name">Sam Carter</div>
+              <div class="email">sam@example.com</div>
+            </td>
+            <td><span class="chip pending">Pending</span></td>
+            <td>-</td>
+            <td>1st: 10:00 AM block</td>
+            <td><a href="#">/portal/sam_carter?event=...</a></td>
+            <td>
+              <div class="actions">
+                <button class="mini confirm">Allocate Now</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="name">Taylor Grant</div>
+              <div class="email">taylor@example.com</div>
+            </td>
+            <td><span class="chip cancelled">Cancelled</span></td>
+            <td>-</td>
+            <td>Was assigned 8:45 AM</td>
+            <td><a href="#">/portal/taylor_grant?event=...</a></td>
+            <td>
+              <div class="actions">
+                <button class="mini">Reopen</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div class="foot">
+      <span>Preview only: visual concept for a future in-app registrations page.</span>
+      <span>Next build: React page + Firestore live data + action handlers.</span>
+    </div>
+  </div>
+</body>
+</html>

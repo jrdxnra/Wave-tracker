@@ -2,19 +2,26 @@
 
 
 import { useEffect, useState } from 'react';
+import { doc, getFirestore, onSnapshot } from 'firebase/firestore';
 import { useWaveStore } from '@/store/waveStore';
 import { clientHasMounted, markClientMounted } from '@/lib/clientMounted';
+import { getFirebase } from '@/lib/firebase';
 import WaveQuickViewCard from '@/components/WaveQuickViewCard';
 import ConfigurationModal from '@/components/ConfigurationModal';
 import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
 import PasscodeProtection from '@/components/PasscodeProtection';
 import EventPageHeader from '@/components/EventPageHeader';
 import LoadingState from '@/components/LoadingState';
+import RegistrationsTab from '@/components/RegistrationsTab';
 
 export default function Page() {
   const [mounted, setMounted] = useState(clientHasMounted);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
+  const [activeTab, setActiveTab] = useState<'waves' | 'registrations'>('waves');
+  const [pendingWaveFocusTime, setPendingWaveFocusTime] = useState<string | null>(null);
+  const [pinnedFormUrl, setPinnedFormUrl] = useState('');
+  const [pinnedSheetUrl, setPinnedSheetUrl] = useState('');
   const {
     waves,
     eventNotes,
@@ -30,6 +37,10 @@ export default function Page() {
   } = useWaveStore();
 
   const waveIds = Object.keys(waves);
+
+  const waveIdFromTime = (label: string): string => {
+    return `wave-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  };
 
   const handleManualSave = async () => {
     try {
@@ -58,6 +69,58 @@ export default function Page() {
     }
   }, [eventBranding]);
 
+  useEffect(() => {
+    let unsubscribe = () => {};
+    try {
+      const db = getFirestore(getFirebase().app);
+      const configRef = doc(db, 'events', activeEventId, 'config', 'global');
+      unsubscribe = onSnapshot(
+        configRef,
+        (snapshot) => {
+          const links = snapshot.exists() ? snapshot.data().integrationLinks || {} : {};
+          setPinnedFormUrl(typeof links.formUrl === 'string' ? links.formUrl : '');
+          setPinnedSheetUrl(typeof links.sheetUrl === 'string' ? links.sheetUrl : '');
+        },
+        () => {
+          setPinnedFormUrl('');
+          setPinnedSheetUrl('');
+        }
+      );
+    } catch {
+      setPinnedFormUrl('');
+      setPinnedSheetUrl('');
+    }
+
+    return () => unsubscribe();
+  }, [activeEventId]);
+
+  useEffect(() => {
+    if (activeTab !== 'waves' || !pendingWaveFocusTime) return;
+
+    const targetId = waveIdFromTime(pendingWaveFocusTime);
+    const scrollToTarget = () => {
+      const target = document.getElementById(targetId);
+      if (!target) return false;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return true;
+    };
+
+    if (scrollToTarget()) {
+      setPendingWaveFocusTime(null);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (scrollToTarget()) {
+        setPendingWaveFocusTime(null);
+      }
+    }, 120);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeTab, pendingWaveFocusTime, waves]);
+
   // Manual save system - users save when ready using the Save Wave button
 
   // Prevent hydration mismatch: use deterministic fallback before mount.
@@ -78,89 +141,127 @@ export default function Page() {
             subtitle="Manage wave based events with ease"
           />
 
-        {/* Total Participant Count Summary */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-          <div className="bg-white rounded-lg shadow-md p-4 border-l-4" style={{ borderLeftColor: accent }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Total Participants</h2>
-                <p className="text-sm text-gray-600">Across all waves</p>
-              </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold" style={{ color: accent }}>
-                  {Object.values(waves).reduce((total, wave) => total + wave.participants.length, 0)}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {waveIds.length} wave{waveIds.length !== 1 ? 's' : ''}
-                </div>
-              </div>
+        <div className="mb-6">
+          <div className="bg-white rounded-lg shadow-md p-2 border border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="inline-flex gap-2">
+              <button
+                onClick={() => setActiveTab('waves')}
+                className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${activeTab === 'waves' ? 'text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                style={activeTab === 'waves' ? { backgroundColor: accent } : undefined}
+              >
+                Waves
+              </button>
+              <button
+                onClick={() => setActiveTab('registrations')}
+                className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${activeTab === 'registrations' ? 'text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                style={activeTab === 'registrations' ? { backgroundColor: accent } : undefined}
+              >
+                Registrations
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              {pinnedFormUrl && (
+                <a
+                  href={pinnedFormUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-2 rounded-md text-xs font-semibold text-white"
+                  style={{ backgroundColor: accent }}
+                >
+                  Open Form
+                </a>
+              )}
+              {pinnedSheetUrl && (
+                <a
+                  href={pinnedSheetUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-2 rounded-md text-xs font-semibold text-white"
+                  style={{ backgroundColor: accent }}
+                >
+                  Open Sheet
+                </a>
+              )}
             </div>
           </div>
         </div>
 
-        <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-          <div className="mb-8">
-            <div id="all-waves-quick-view-container" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {waveIds.length === 0 ? (
-                <div className="col-span-full flex flex-col items-center justify-center py-12">
-                  <p className="text-center text-gray-500 mb-6">
-                    No waves created yet. Create your first wave to get started!
-                  </p>
-                  <button
-                    onClick={() => addWave()}
-                    className="btn-primary text-white rounded-lg shadow-lg px-8 py-4 text-lg font-bold flex flex-col items-center justify-center transform hover:scale-105 transition-all duration-200"
-                    style={{ backgroundColor: accent }}
-                    title="Add your first wave"
-                  >
-                    <span className="text-4xl mb-2">+</span>
-                    <span>Create First Wave</span>
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {waveIds.map((id) => <WaveQuickViewCard key={id} wave={waves[id]} />)}
-                  {/* Dynamic Add Wave Button positioned as next card */}
-                  <div className="flex items-center justify-center">
-                    <button
-                      onClick={() => addWave()}
-                      className="btn-primary text-white rounded-lg shadow-lg px-6 py-8 text-sm font-bold flex flex-col items-center justify-center w-full h-full min-h-[200px] transform hover:scale-105 transition-all duration-200"
-                      style={{ backgroundColor: accent }}
-                      title="Add new wave"
-                    >
-                      <span className="text-3xl mb-2">+</span>
-                      <span>Add Wave</span>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
-            <div id="waves-content-container">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Event Notes & Details:</h3>
-                <div className="space-y-3">
-                  <textarea
-                    value={eventNotes}
-                    onChange={(e) => setEventNotes(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md input-focus-brand resize-vertical"
-                    rows={4}
-                    placeholder="Enter event notes, special instructions, or additional details..."
-                  />
-            <div className="flex justify-center">
-              <button
-                onClick={handleManualSave}
-                className="btn-secondary text-white font-bold py-2 px-4 rounded-md transition duration-300"
-              >
-                <span className="hidden lg:inline">Save Notes</span>
-                <span className="lg:hidden">Save</span>
-              </button>
-            </div>
+        <main className="py-8">
+          {activeTab === 'waves' ? (
+            <>
+              <div className="mb-8">
+                <div id="all-waves-quick-view-container" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {waveIds.length === 0 ? (
+                    <div className="col-span-full flex flex-col items-center justify-center py-12">
+                      <p className="text-center text-gray-500 mb-6">
+                        No waves created yet. Create your first wave to get started!
+                      </p>
+                      <button
+                        onClick={() => addWave()}
+                        className="btn-primary text-white rounded-lg shadow-lg px-8 py-4 text-lg font-bold flex flex-col items-center justify-center transform hover:scale-105 transition-all duration-200"
+                        style={{ backgroundColor: accent }}
+                        title="Add your first wave"
+                      >
+                        <span className="text-4xl mb-2">+</span>
+                        <span>Create First Wave</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {waveIds.map((id) => <WaveQuickViewCard key={id} wave={waves[id]} />)}
+                      {/* Dynamic Add Wave Button positioned as next card */}
+                      <div className="flex items-center justify-center">
+                        <button
+                          onClick={() => addWave()}
+                          className="btn-primary text-white rounded-lg shadow-lg px-6 py-8 text-sm font-bold flex flex-col items-center justify-center w-full h-full min-h-[200px] transform hover:scale-105 transition-all duration-200"
+                          style={{ backgroundColor: accent }}
+                          title="Add new wave"
+                        >
+                          <span className="text-3xl mb-2">+</span>
+                          <span>Add Wave</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
-            </div>
-          </div>
+
+              <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
+                <div id="waves-content-container">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Event Notes & Details:</h3>
+                    <div className="space-y-3">
+                      <textarea
+                        value={eventNotes}
+                        onChange={(e) => setEventNotes(e.target.value)}
+                        className="w-full p-3 border border-gray-300 rounded-md input-focus-brand resize-vertical"
+                        rows={4}
+                        placeholder="Enter event notes, special instructions, or additional details..."
+                      />
+                      <div className="flex justify-center">
+                        <button
+                          onClick={handleManualSave}
+                          className="btn-secondary text-white font-bold py-2 px-4 rounded-md transition duration-300"
+                        >
+                          <span className="hidden lg:inline">Save Notes</span>
+                          <span className="lg:hidden">Save</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <RegistrationsTab
+              eventId={activeEventId}
+              accent={accent}
+              onNavigateToWaveTime={(waveTime) => {
+                setPendingWaveFocusTime(waveTime);
+                setActiveTab('waves');
+              }}
+            />
+          )}
         </main>
       </div>
 
