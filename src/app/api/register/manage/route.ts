@@ -27,7 +27,7 @@ interface ManagePayload {
   manual_wave_time?: string;
 }
 
-const DEFAULT_EVENT_ID = 'super-sprint-registration-2026-test';
+const DEFAULT_EVENT_ID = 'super-sprint';
 
 let cachedApp: FirebaseApp | null = null;
 let cachedDb: Firestore | null = null;
@@ -266,6 +266,21 @@ function buildWaveTimes(startMinutes: number, totalWaves: number, intervalMinute
   return times;
 }
 
+function sortUniqueWaveTimes(rawTimes: Array<string | undefined>): string[] {
+  return Array.from(new Set(
+    rawTimes
+      .map((value) => normalizeWaveTime(value) || '')
+      .filter(Boolean)
+  )).sort((a, b) => {
+    const minutesA = parseTimeToMinutes(a);
+    const minutesB = parseTimeToMinutes(b);
+    if (minutesA === null && minutesB === null) return a.localeCompare(b);
+    if (minutesA === null) return 1;
+    if (minutesB === null) return -1;
+    return minutesA - minutesB;
+  });
+}
+
 async function getEventWaveConfig(db: Firestore, eventId: string): Promise<{ waveCapacityLimit: number; waveTimes: string[] }> {
   const configRef = doc(db, 'events', eventId, 'config', 'global');
   const configSnap = await getDoc(configRef);
@@ -285,9 +300,17 @@ async function getEventWaveConfig(db: Firestore, eventId: string): Promise<{ wav
     throw new Error(`maxParticipants must be >= 1 in events/${eventId}/config/global`);
   }
 
+  const wavesSnap = await getDocs(collection(db, 'events', eventId, 'waves'));
+  const persistedWaveTimes = sortUniqueWaveTimes(
+    wavesSnap.docs.map((docSnap) => String(docSnap.data().startTime || ''))
+  );
+  if (persistedWaveTimes.length > 0) {
+    return { waveCapacityLimit, waveTimes: persistedWaveTimes };
+  }
+
   const startTime = String(data?.event?.startTime || '').trim();
   const totalWavesRaw = Number(data?.event?.totalWaves);
-  const intervalRaw = Number(data?.timing?.intervalMinutes);
+  const intervalRaw = Number(data?.event?.waveStartIntervalMinutes ?? data?.timing?.intervalMinutes);
 
   const startMinutes = parseTimeToMinutes(startTime);
   if (startMinutes === null) {
@@ -304,7 +327,7 @@ async function getEventWaveConfig(db: Firestore, eventId: string): Promise<{ wav
     throw new Error(`Missing or invalid timing.intervalMinutes in events/${eventId}/config/global`);
   }
 
-  const waveTimes = buildWaveTimes(startMinutes, totalWaves, intervalMinutes);
+  const waveTimes = sortUniqueWaveTimes(buildWaveTimes(startMinutes, totalWaves, intervalMinutes));
 
   return { waveCapacityLimit, waveTimes };
 }
@@ -361,6 +384,9 @@ async function assignParticipantToWave(args: {
     name: String(args.regData.name || '').trim() || args.participantId,
     waveData: {},
     includeInLeaderboard: args.regData.includeInLeaderboard !== false,
+    pingGroupOptIn: !!args.regData.pingGroupOptIn,
+    swimComfort: String(args.regData.swimComfort || ''),
+    isFirstTri: !!args.regData.isFirstTri,
     registrationStatus: 'Confirmed',
     updatedAt: args.now,
     source: 'manual-ops',

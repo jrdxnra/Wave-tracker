@@ -41,6 +41,8 @@ interface RegistrationRow {
   source: string;
   sourceSheet: string;
   triggerSource: string;
+  pingGroupOptIn: boolean;
+  includeInLeaderboard: boolean;
   updatedAt: string;
 }
 
@@ -185,8 +187,51 @@ function normalizeParticipantName(value: string): string {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function isWebhookRegistrationRow(row: RegistrationRow): boolean {
+  const source = String(row.source || '').trim().toLowerCase();
+  const trigger = String(row.triggerSource || '').trim().toLowerCase();
+  const hasSourceSheet = String(row.sourceSheet || '').trim().length > 0;
+  const hasRowId = /^row-\d+$/i.test(String(row.id || '').trim());
+
+  if (hasSourceSheet) return true;
+  if (source === 'google-form-webhook') return true;
+  if (trigger === 'form_submit' || trigger === 'time_driven_sync' || trigger === 'bulk_backfill') return true;
+  if (hasRowId) return true;
+  return false;
+}
+
 function waveIdFromTime(label: string): string {
   return `wave-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+function CommunityOptIcon({
+  label,
+  glyph,
+  optedIn,
+}: {
+  label: string;
+  glyph: string;
+  optedIn: boolean;
+}) {
+  return (
+    <span className="relative inline-flex group">
+      <span
+        tabIndex={0}
+        aria-label={`${label}: ${optedIn ? 'Opted in' : 'Opted out'}`}
+        className={`relative inline-flex items-center justify-center h-5 min-w-5 rounded-full px-1 text-[10px] font-bold ${
+          optedIn
+            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+            : 'bg-rose-100 text-rose-700 border border-rose-200'
+        }`}
+      >
+        {glyph}
+        {!optedIn && <span className="pointer-events-none absolute left-0 right-0 top-1/2 h-px -rotate-12 bg-rose-700" />}
+      </span>
+      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        {label}: {optedIn ? 'Yes' : 'No'}
+      </span>
+    </span>
+  );
 }
 
 function parseClockToMinutes(value: string): number | null {
@@ -320,6 +365,8 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
             source: data.source || '',
             sourceSheet: data.sourceSheet || '',
             triggerSource: data.triggerSource || '',
+            pingGroupOptIn: !!data.pingGroupOptIn,
+            includeInLeaderboard: data.includeInLeaderboard !== false,
             updatedAt: data.updatedAt || '',
           } as RegistrationRow;
         });
@@ -398,9 +445,8 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
 
   const sheetRows = useMemo(() => {
     return registrations.filter((row) => {
-      // Strict source-of-truth view: rows must come from form webhook payloads
-      // and include a real source sheet label from Apps Script.
-      return !!row.sourceSheet.trim();
+      // Include webhook-originated rows even when legacy records are missing sourceSheet.
+      return isWebhookRegistrationRow(row);
     });
   }, [registrations]);
 
@@ -426,6 +472,26 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
     });
   }, [sheetRows, search, statusFilter, swimFilter, firstTriFilter, entryModeFilter]);
 
+  const availableWaveTimes = useMemo(() => {
+    const fromWaveDocs = Object.values(wavesById)
+      .map((wave) => String(wave.startTime || '').trim())
+      .map((time) => {
+        const minutes = parseClockToMinutes(time);
+        return minutes === null ? null : formatMinutesToLabel(minutes);
+      })
+      .filter((time): time is string => Boolean(time));
+
+    const sourceTimes = fromWaveDocs.length > 0 ? fromWaveDocs : configuredWaveTimes;
+    return Array.from(new Set(sourceTimes)).sort((a, b) => {
+      const minutesA = parseClockToMinutes(a);
+      const minutesB = parseClockToMinutes(b);
+      if (minutesA === null && minutesB === null) return a.localeCompare(b);
+      if (minutesA === null) return 1;
+      if (minutesB === null) return -1;
+      return minutesA - minutesB;
+    });
+  }, [wavesById, configuredWaveTimes]);
+
   const confirmedCount = sheetRows.filter((row) => row.registrationStatus === 'Confirmed').length;
   const waitlistedCount = sheetRows.filter((row) => row.registrationStatus === 'Waitlisted').length;
 
@@ -448,14 +514,17 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
   }, [sheetRows]);
 
   const waveCounts = useMemo(() => {
-    const counts = Object.fromEntries(configuredWaveTimes.map((time) => [time, 0])) as Record<string, number>;
+    const counts = Object.fromEntries(availableWaveTimes.map((time) => [time, 0])) as Record<string, number>;
     Object.values(wavesById).forEach((wave) => {
-      const time = String(wave.startTime || '').trim();
-      if (!time || counts[time] === undefined) return;
-      counts[time] += Array.isArray(wave.participants) ? wave.participants.length : 0;
+      const rawTime = String(wave.startTime || '').trim();
+      const normalizedTime = parseClockToMinutes(rawTime);
+      if (normalizedTime === null) return;
+      const label = formatMinutesToLabel(normalizedTime);
+      if (counts[label] === undefined) return;
+      counts[label] += Array.isArray(wave.participants) ? wave.participants.length : 0;
     });
     return counts;
-  }, [configuredWaveTimes, wavesById]);
+  }, [availableWaveTimes, wavesById]);
 
   const overCapacityWaveSet = useMemo(() => {
     const set = new Set<string>();
@@ -535,7 +604,7 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
   };
 
   const runManageAction = async (row: RegistrationRow, action: Exclude<ManageAction, 'cancel'>) => {
-    const manualWave = manualWaveSelection[row.id] || row.confirmedWaveTime || configuredWaveTimes[0] || '';
+    const manualWave = manualWaveSelection[row.id] || row.confirmedWaveTime || availableWaveTimes[0] || '';
     setBusy(row.id, action);
     let shouldWaitForSync = false;
 
@@ -746,36 +815,6 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
                           <div className="flex items-center gap-1.5 whitespace-nowrap min-w-[280px]">
                             <span className="font-semibold text-gray-900">{row.name || 'Unnamed participant'}</span>
 
-                            {row.swimComfort && (
-                              <span className="relative inline-flex group">
-                                <span
-                                  tabIndex={0}
-                                  aria-label={`Swim level ${getSwimComfortLabel(row.swimComfort)}`}
-                                  className={`inline-flex items-center justify-center h-5 min-w-5 rounded-full px-1 text-[10px] font-bold ${getSwimComfortBadgeClass(row.swimComfort)}`}
-                                >
-                                  {getSwimComfortCode(row.swimComfort)}
-                                </span>
-                                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-                                  Swim: {getSwimComfortLabel(row.swimComfort)} ({getSwimComfortCode(row.swimComfort)})
-                                </span>
-                              </span>
-                            )}
-
-                            {row.isFirstTri && (
-                              <span className="relative inline-flex group">
-                                <span
-                                  tabIndex={0}
-                                  aria-label="First triathlon"
-                                  className="inline-flex items-center justify-center h-5 min-w-5 rounded-full px-1 text-[10px] font-bold bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-200"
-                                >
-                                  ★
-                                </span>
-                                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-                                  First triathlon
-                                </span>
-                              </span>
-                            )}
-
                             <span className="relative inline-flex group">
                               <span
                                 tabIndex={0}
@@ -788,6 +827,9 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
                                 Entry: {getEntryModeLabel(row.entryMode, row.groupName)}
                               </span>
                             </span>
+
+                            <CommunityOptIcon label="Ping group" glyph="P" optedIn={row.pingGroupOptIn} />
+                            <CommunityOptIcon label="Leaderboard" glyph="🏆" optedIn={row.includeInLeaderboard} />
 
                             {getCompanionDisplayName(row.entryMode, row.groupName) && (
                               <span className="relative inline-flex group">
@@ -853,18 +895,18 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
 
                             <div className="inline-flex items-center rounded-md border border-gray-300 bg-white overflow-hidden">
                               <select
-                                value={manualWaveSelection[row.id] || row.confirmedWaveTime || configuredWaveTimes[0] || ''}
+                                value={manualWaveSelection[row.id] || row.confirmedWaveTime || availableWaveTimes[0] || ''}
                                 onChange={(e) => setManualWaveSelection((prev) => ({ ...prev, [row.id]: e.target.value }))}
                                 className="h-7 w-[74px] min-w-[74px] max-w-[74px] flex-none shrink-0 border-0 px-1 input-focus-brand bg-white text-[10px]"
                                 title="Manual Override Wave"
                               >
-                                {configuredWaveTimes.map((time) => (
+                                {availableWaveTimes.map((time) => (
                                   <option key={`${row.id}-${time}`} value={time}>{time}</option>
                                 ))}
                               </select>
                               <button
                                 type="button"
-                                disabled={!!busyAction || configuredWaveTimes.length === 0}
+                                disabled={!!busyAction || availableWaveTimes.length === 0}
                                 onClick={() => {
                                   void runManageAction(row, 'manual_override');
                                 }}
@@ -911,13 +953,21 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
         </div>
 
         <aside className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 h-fit">
+          <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-700">Row Key</h4>
+            <div className="mt-2 space-y-1 text-[11px] text-gray-700">
+              <div>S / B / G = Solo / Buddy / Group</div>
+              <div>P = Ping group</div>
+              <div>🏆 = Leaderboard</div>
+            </div>
+          </div>
+
           <h3 className="text-sm font-semibold text-gray-900 mb-1">Mini Wave Tracker</h3>
-          <p className="text-xs text-gray-500 mb-3">Create or sync wave docs from Event Config.</p>
-          {configuredWaveTimes.length === 0 && (
+          {availableWaveTimes.length === 0 && (
             <p className="text-xs text-gray-500 mb-2">Configure start time, interval, and total waves in Event Settings.</p>
           )}
           <div className="space-y-1.5">
-            {configuredWaveTimes.map((time) => {
+            {availableWaveTimes.map((time) => {
               const count = waveCounts[time] || 0;
               const atCapacity = configuredCapacity !== null && count >= configuredCapacity;
               const isOverCapacity = overCapacityWaveSet.has(time);

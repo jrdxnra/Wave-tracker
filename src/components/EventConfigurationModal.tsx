@@ -64,7 +64,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
 
   useEffect(() => {
     if (isOpen) {
-      loadEventsCatalog();
+      loadEventsCatalog({ preserveActiveEvent: true });
     }
   }, [isOpen, loadEventsCatalog]);
 
@@ -104,7 +104,7 @@ export default function EventConfigurationModal({ isOpen, onClose }: EventConfig
     try {
       await createEvent(newEventName.trim());
       setNewEventName('');
-      await loadEventsCatalog();
+      await loadEventsCatalog({ preserveActiveEvent: true });
     } catch (error) {
       console.error('Failed to create event:', error);
       alert('Failed to create event. Please try again.');

@@ -49,8 +49,8 @@ interface RegistrationPayload {
 type RegistrationStatus = 'Pending' | 'Confirmed' | 'Waitlisted' | 'Cancelled';
 type ProcessingMode = 'auto_allocation' | 'manual_update';
 
-const DEFAULT_EVENT_ID = 'super-sprint-registration-2026-test';
-const DEFAULT_EVENT_NAME = 'Super Sprint Registration 2026 (Test)';
+const DEFAULT_EVENT_ID = 'super-sprint';
+const DEFAULT_EVENT_NAME = 'Super Sprint';
 const DEFAULT_WAVE_TIMES = buildDefaultWaveTimes();
 
 let cachedApp: FirebaseApp | null = null;
@@ -114,12 +114,37 @@ function normalizeGroupName(rawGroupName: string | undefined, rawEntryMode: stri
   return group;
 }
 
-function buildParticipantId(payload: RegistrationPayload): string {
+type ParticipantIdentitySource = 'portal_url' | 'row_number';
+
+function parseParticipantIdFromPortalUrl(portalUrl: string | undefined): string {
+  const raw = String(portalUrl || '').trim();
+  if (!raw) return '';
+  const match = raw.match(/(?:^|[/?&])(?:portal\/)?(row-\d+)(?:[/?&]|$)/i);
+  if (!match) return '';
+  return match[1].toLowerCase();
+}
+
+function buildParticipantIdentity(payload: RegistrationPayload): { participantId: string; source: ParticipantIdentitySource | '' } {
+  const fromPortal = parseParticipantIdFromPortalUrl(payload.portal_url);
+  if (fromPortal) {
+    return {
+      participantId: fromPortal,
+      source: 'portal_url',
+    };
+  }
+
   const rowNumber = Number(payload.row_number || 0);
   if (Number.isFinite(rowNumber) && rowNumber > 1) {
-    return `row-${Math.floor(rowNumber)}`;
+    return {
+      participantId: `row-${Math.floor(rowNumber)}`,
+      source: 'row_number',
+    };
   }
-  return '';
+
+  return {
+    participantId: '',
+    source: '',
+  };
 }
 
 function getFirebaseConfig() {
@@ -161,21 +186,35 @@ function buildDefaultWaveTimes(): string[] {
 }
 
 function parseTimeToMinutes(label: string): number | null {
-  const match = String(label).trim().match(/(\d{1,2}):(\d{2})\s*([aApP][mM])/);
-  if (!match) return null;
+  const raw = String(label).trim();
+  if (!raw) return null;
 
-  let hour = Number(match[1]);
-  const minute = Number(match[2]);
-  const meridiem = match[3].toUpperCase();
-  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+  const ampmMatch = raw.match(/^(\d{1,2}):(\d{2})\s*([aApP][mM])$/);
+  if (ampmMatch) {
+    let hour = Number(ampmMatch[1]);
+    const minute = Number(ampmMatch[2]);
+    const meridiem = ampmMatch[3].toUpperCase();
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
 
-  if (hour === 12) {
-    hour = meridiem === 'AM' ? 0 : 12;
-  } else if (meridiem === 'PM') {
-    hour += 12;
+    if (hour === 12) {
+      hour = meridiem === 'AM' ? 0 : 12;
+    } else if (meridiem === 'PM') {
+      hour += 12;
+    }
+
+    return hour * 60 + minute;
   }
 
-  return hour * 60 + minute;
+  const twentyFourHourMatch = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (twentyFourHourMatch) {
+    const hour = Number(twentyFourHourMatch[1]);
+    const minute = Number(twentyFourHourMatch[2]);
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return hour * 60 + minute;
+  }
+
+  return null;
 }
 
 function formatMinutesToLabel(totalMinutes: number): string {
@@ -293,6 +332,29 @@ function buildCandidateWaveTimes(payload: RegistrationPayload, allWaveTimes: str
   return Array.from(new Set([...firstCandidates, ...secondCandidates, ...allWaveTimes]));
 }
 
+function buildWaveTimes(startMinutes: number, totalWaves: number, intervalMinutes: number): string[] {
+  const times: string[] = [];
+  for (let index = 0; index < totalWaves; index += 1) {
+    times.push(formatMinutesToLabel(startMinutes + index * intervalMinutes));
+  }
+  return times;
+}
+
+function sortUniqueWaveTimes(rawTimes: Array<string | undefined>): string[] {
+  return Array.from(new Set(
+    rawTimes
+      .map((value) => normalizeWaveTime(value) || '')
+      .filter(Boolean)
+  )).sort((a, b) => {
+    const minutesA = parseTimeToMinutes(a);
+    const minutesB = parseTimeToMinutes(b);
+    if (minutesA === null && minutesB === null) return a.localeCompare(b);
+    if (minutesA === null) return 1;
+    if (minutesB === null) return -1;
+    return minutesA - minutesB;
+  });
+}
+
 async function ensureEventVisible(db: Firestore, eventId: string, eventName: string) {
   const indexRef = doc(db, 'config', 'eventsIndex');
   const indexSnap = await getDoc(indexRef);
@@ -387,13 +449,45 @@ async function getWaveCapacityLimit(db: Firestore, eventId: string): Promise<num
   return normalized;
 }
 
+async function getEventWaveTimes(db: Firestore, eventId: string): Promise<string[]> {
+  const wavesSnap = await getDocs(collection(db, 'events', eventId, 'waves'));
+  const persistedWaveTimes = sortUniqueWaveTimes(
+    wavesSnap.docs.map((docSnap) => String(docSnap.data().startTime || ''))
+  );
+  if (persistedWaveTimes.length > 0) {
+    return persistedWaveTimes;
+  }
+
+  const configRef = doc(db, 'events', eventId, 'config', 'global');
+  const configSnap = await getDoc(configRef);
+  if (!configSnap.exists()) {
+    return DEFAULT_WAVE_TIMES;
+  }
+
+  const data = configSnap.data() as Record<string, unknown>;
+  const event = (data.event || {}) as Record<string, unknown>;
+  const timing = (data.timing || {}) as Record<string, unknown>;
+
+  const startTime = String(event.startTime || '').trim();
+  const startMinutes = parseTimeToMinutes(startTime);
+  const totalWaves = Math.floor(Number(event.totalWaves));
+  const intervalMinutes = Math.floor(Number(event.waveStartIntervalMinutes ?? timing.intervalMinutes));
+
+  if (startMinutes === null || !Number.isFinite(totalWaves) || totalWaves < 1 || !Number.isFinite(intervalMinutes) || intervalMinutes < 1) {
+    return DEFAULT_WAVE_TIMES;
+  }
+
+  return sortUniqueWaveTimes(buildWaveTimes(startMinutes, totalWaves, intervalMinutes));
+}
+
 async function chooseAutoWaveTime(
   db: Firestore,
   eventId: string,
   payload: RegistrationPayload,
-  waveCapacityLimit: number
+  waveCapacityLimit: number,
+  waveTimes: string[]
 ): Promise<string | null> {
-  const queue = buildCandidateWaveTimes(payload, DEFAULT_WAVE_TIMES);
+  const queue = buildCandidateWaveTimes(payload, waveTimes);
 
   for (const timeLabel of queue) {
     const count = await countWaveParticipantsByTime(db, eventId, timeLabel);
@@ -459,9 +553,10 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = (await req.json()) as RegistrationPayload;
-    const participantId = buildParticipantId(payload);
+    const identity = buildParticipantIdentity(payload);
+    const participantId = identity.participantId;
     if (!participantId) {
-      return NextResponse.json({ ok: false, error: 'row_number is required' }, { status: 400 });
+      return NextResponse.json({ ok: false, error: 'row_number or portal_url row token is required' }, { status: 400 });
     }
 
     const db = getServerDb();
@@ -469,15 +564,19 @@ export async function POST(req: NextRequest) {
     const eventName = DEFAULT_EVENT_NAME;
     const rowNumber = Number(payload.row_number || 0);
     const waveCapacityLimit = await getWaveCapacityLimit(db, eventId);
+    const waveTimes = await getEventWaveTimes(db, eventId);
     const triggerSource = (payload.trigger_source || '').trim();
     const normalizedEntryMode = normalizeEntryMode(payload.entry_mode, payload.group_name);
     const normalizedGroupName = normalizeGroupName(payload.group_name, payload.entry_mode);
     const now = new Date().toISOString();
     const portalUrl = payload.portal_url || `/portal/${participantId}?event=${eventId}`;
     const includeInLeaderboard = payload.include_in_leaderboard !== false;
+    const pingGroupOptIn = !!payload.ping_group_opt_in;
 
     await ensureEventVisible(db, eventId, eventName);
-  await removeLegacyRegistrationsByRowNumber(db, eventId, rowNumber, participantId);
+    if (identity.source === 'row_number') {
+      await removeLegacyRegistrationsByRowNumber(db, eventId, rowNumber, participantId);
+    }
 
     const regRef = doc(db, 'events', eventId, 'registrations', participantId);
     const regSnap = await getDoc(regRef);
@@ -491,7 +590,7 @@ export async function POST(req: NextRequest) {
     if (triggerSource === 'form_submit') {
       mode = 'auto_allocation';
       if (finalStatus !== 'Cancelled') {
-        const assigned = await chooseAutoWaveTime(db, eventId, payload, waveCapacityLimit);
+        const assigned = await chooseAutoWaveTime(db, eventId, payload, waveCapacityLimit, waveTimes);
         if (assigned) {
           finalStatus = 'Confirmed';
           finalWaveTime = assigned;
@@ -539,6 +638,7 @@ export async function POST(req: NextRequest) {
       volunteerRole: payload.volunteer_role || '',
       internalNotes: payload.internal_notes || '',
       portalUrl,
+      participantIdSource: identity.source || null,
       updatedAt: now,
       source: 'google-form-webhook',
     }, { merge: true });
@@ -555,6 +655,9 @@ export async function POST(req: NextRequest) {
         rowNumber: payload.row_number || null,
         waveData: {},
         includeInLeaderboard,
+        pingGroupOptIn,
+        swimComfort: payload.swim_comfort || '',
+        isFirstTri: !!payload.is_first_tri,
         registrationStatus: finalStatus,
         updatedAt: now,
         source: 'google-form-webhook',

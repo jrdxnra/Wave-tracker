@@ -390,6 +390,7 @@ interface FirebaseConfigData {
   alertSettings?: WaveStore['alertSettings'];
   accessPasscode?: string;
   passcodeProtectionEnabled?: boolean;
+  defaultStartEventId?: string;
   eventClockEnabled?: boolean;
   feedbackEnabled?: boolean;
   branding?: EventBranding;
@@ -411,6 +412,7 @@ type MovementIntervals = Record<string, { workMinutes: number; restMinutes: numb
 
 interface WaveStore {
   activeEventId: string;
+  defaultStartEventId: string;
   eventsCatalog: EventSummary[];
   eventBranding: EventBranding;
   themeColors: { start: string; mid: string; end: string; accent: string; accentHover: string };
@@ -477,6 +479,7 @@ interface WaveStore {
   setEventConfig: (startDate: string, startTime: string, totalWaves: number, eventId: string) => Promise<void>;
   setAccessPasscode: (passcode: string) => Promise<void>;
   setPasscodeProtectionEnabled: (enabled: boolean) => Promise<void>;
+  setDefaultStartEventId: (eventId: string) => Promise<void>;
   setEventClockEnabled: (enabled: boolean) => Promise<void>;
   setFeedbackEnabled: (enabled: boolean, eventId: string) => Promise<void>;
   submitFeedback: (rating: number, message: string) => Promise<void>;
@@ -485,9 +488,9 @@ interface WaveStore {
   deleteEvent: (eventId: string) => Promise<void>;
   setActiveEvent: (eventId: string) => Promise<void>;
   updateEventBranding: (updates: Partial<EventBranding>, eventId: string) => Promise<void>;
-  loadEventsCatalog: () => Promise<void>;
+  loadEventsCatalog: (options?: { preserveActiveEvent?: boolean }) => Promise<void>;
   saveAll: () => Promise<void>;
-  loadAll: () => Promise<void>;
+  loadAll: (options?: { preserveActiveEvent?: boolean }) => Promise<void>;
   loadGlobalConfig: () => Promise<void>;
   invalidateCache: () => void;
   clearCacheAndReload: () => Promise<void>;
@@ -543,6 +546,7 @@ export const useWaveStore = create<WaveStore>()(
   persist(
     (set, get) => ({
       activeEventId: DEFAULT_EVENT_ID,
+      defaultStartEventId: DEFAULT_EVENT_ID,
       eventsCatalog: [{ id: DEFAULT_EVENT_ID, name: 'G-ROX' }],
       eventBranding: DEFAULT_BRANDING,
       themeColors: getThemeColors(DEFAULT_BRANDING),
@@ -669,6 +673,7 @@ export const useWaveStore = create<WaveStore>()(
           name,
           waveData: createInitialWaveData(get().customEvents),
           includeInLeaderboard: true, // Default to checked - must opt out
+          pingGroupOptIn: false,
         };
         
         const updatedWave = { ...wave, participants: [...wave.participants, participant] };
@@ -702,6 +707,7 @@ export const useWaveStore = create<WaveStore>()(
             name: participant.name,
             waveData: participant.waveData,
             includeInLeaderboard: participant.includeInLeaderboard,
+            pingGroupOptIn: participant.pingGroupOptIn === true,
             updatedAt: serverTimestamp(),
           }, { merge: true });
           
@@ -1017,6 +1023,27 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
 
+      setDefaultStartEventId: async (eventId) => {
+        const trimmedEventId = eventId.trim();
+        if (!trimmedEventId) return;
+
+        const exists = get().eventsCatalog.some((event) => event.id === trimmedEventId);
+        if (!exists) return;
+
+        set({ defaultStartEventId: trimmedEventId });
+
+        try {
+          const { db } = getFirebase();
+          const configRef = getGlobalSettingsRef(db);
+          await setDoc(configRef, {
+            defaultStartEventId: trimmedEventId,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        } catch (error) {
+          console.error('❌ Failed to save default start event setting to Firebase:', error);
+        }
+      },
+
       setEventClockEnabled: async (enabled) => {
         set({ eventClockEnabled: enabled });
         if (typeof window !== 'undefined') {
@@ -1085,7 +1112,7 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
 
-      loadEventsCatalog: async () => {
+      loadEventsCatalog: async (options = {}) => {
         const { db } = getFirebase();
         try {
           const indexRef = getEventsIndexRef(db);
@@ -1098,7 +1125,11 @@ export const useWaveStore = create<WaveStore>()(
               updatedAt: new Date().toISOString(),
             }, { merge: true });
             await ensureDefaultEventAvailable(db);
-            set({ activeEventId: DEFAULT_EVENT_ID, eventsCatalog: initialEvents });
+            set({
+              activeEventId: DEFAULT_EVENT_ID,
+              defaultStartEventId: DEFAULT_EVENT_ID,
+              eventsCatalog: initialEvents,
+            });
             return;
           }
 
@@ -1166,10 +1197,28 @@ export const useWaveStore = create<WaveStore>()(
             events.unshift({ id: DEFAULT_EVENT_ID, name: DEFAULT_EVENT_NAME });
           }
 
-          const preferredActiveEventId = get().activeEventId || DEFAULT_EVENT_ID;
+          let defaultStartEventId = DEFAULT_EVENT_ID;
+          try {
+            const sharedSnap = await getDoc(getGlobalSettingsRef(db));
+            if (sharedSnap.exists()) {
+              const sharedData = sharedSnap.data() as FirebaseConfigData;
+              const configured = typeof sharedData.defaultStartEventId === 'string'
+                ? sharedData.defaultStartEventId.trim()
+                : '';
+              if (configured && events.some((event) => event.id === configured)) {
+                defaultStartEventId = configured;
+              }
+            }
+          } catch {
+            // Keep fallback default when shared settings cannot be read.
+          }
+
+          const preferredActiveEventId = options.preserveActiveEvent
+            ? (get().activeEventId || defaultStartEventId)
+            : defaultStartEventId;
           const activeEventId = events.some((event) => event.id === preferredActiveEventId)
             ? preferredActiveEventId
-            : DEFAULT_EVENT_ID;
+            : defaultStartEventId;
 
           if (!hasDefaultEvent || discoveredMissingEvents) {
             await setDoc(indexRef, {
@@ -1180,11 +1229,12 @@ export const useWaveStore = create<WaveStore>()(
 
           await ensureDefaultEventAvailable(db);
 
-          set({ eventsCatalog: events, activeEventId });
+          set({ eventsCatalog: events, activeEventId, defaultStartEventId });
         } catch (error) {
           secureLogger.error('❌ Failed to load events catalog:', error);
           set({
             activeEventId: DEFAULT_EVENT_ID,
+            defaultStartEventId: DEFAULT_EVENT_ID,
             eventsCatalog: [{ id: DEFAULT_EVENT_ID, name: DEFAULT_EVENT_NAME }],
           });
         }
@@ -1234,7 +1284,7 @@ export const useWaveStore = create<WaveStore>()(
           eventClockEnabled: false,
         });
 
-        await get().loadAll();
+        await get().loadAll({ preserveActiveEvent: true });
       },
 
       deleteEvent: async (eventId) => {
@@ -1248,6 +1298,10 @@ export const useWaveStore = create<WaveStore>()(
         const remainingEvents = currentEvents.filter((event) => event.id !== trimmedEventId);
         const fallbackActiveEvent = remainingEvents[0]?.id || DEFAULT_EVENT_ID;
         const nextActiveEventId = get().activeEventId === trimmedEventId ? fallbackActiveEvent : get().activeEventId;
+        const currentDefaultStartEventId = get().defaultStartEventId;
+        const nextDefaultStartEventId = currentDefaultStartEventId === trimmedEventId
+          ? fallbackActiveEvent
+          : currentDefaultStartEventId;
 
         const { db } = getFirebase();
         await deleteEventFromFirestore(db, trimmedEventId);
@@ -1257,21 +1311,32 @@ export const useWaveStore = create<WaveStore>()(
           updatedAt: new Date().toISOString(),
         }, { merge: true });
 
+        if (nextDefaultStartEventId !== currentDefaultStartEventId) {
+          await setDoc(getGlobalSettingsRef(db), {
+            defaultStartEventId: nextDefaultStartEventId,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        }
+
         if (get().activeEventId === trimmedEventId) {
           set({
             eventsCatalog: remainingEvents,
             activeEventId: nextActiveEventId,
+            defaultStartEventId: nextDefaultStartEventId,
             waves: {},
             currentWaveId: null,
             isDataLoaded: false,
             lastFirebaseSync: null,
             activeWaves: new Set<string>(),
           });
-          await get().loadAll();
+          await get().loadAll({ preserveActiveEvent: true });
           return;
         }
 
-        set({ eventsCatalog: remainingEvents });
+        set({
+          eventsCatalog: remainingEvents,
+          defaultStartEventId: nextDefaultStartEventId,
+        });
       },
 
       setActiveEvent: async (eventId) => {
@@ -1308,7 +1373,7 @@ export const useWaveStore = create<WaveStore>()(
           themeColors: getThemeColors(DEFAULT_BRANDING),
         });
 
-        await get().loadAll();
+        await get().loadAll({ preserveActiveEvent: true });
       },
 
       updateEventBranding: async (updates, eventId) => {
@@ -1398,6 +1463,7 @@ export const useWaveStore = create<WaveStore>()(
                 name: participant.name,
                 waveData: participant.waveData,
                 includeInLeaderboard: participant.includeInLeaderboard !== false, // Default to true unless explicitly false
+                pingGroupOptIn: participant.pingGroupOptIn === true,
                 updatedAt: new Date().toISOString()
               }, { merge: true });
             }
@@ -1488,6 +1554,7 @@ export const useWaveStore = create<WaveStore>()(
               name: p.name,
               waveData: p.waveData,
               includeInLeaderboard: p.includeInLeaderboard !== false, // Default to true unless explicitly false
+              pingGroupOptIn: p.pingGroupOptIn === true,
               updatedAt: serverTimestamp(),
             }, { merge: true });
           }
@@ -1616,6 +1683,9 @@ export const useWaveStore = create<WaveStore>()(
             if (typeof sharedData.passcodeProtectionEnabled === 'boolean') {
               set({ passcodeProtectionEnabled: sharedData.passcodeProtectionEnabled });
             }
+            if (typeof sharedData.defaultStartEventId === 'string' && sharedData.defaultStartEventId.trim()) {
+              set({ defaultStartEventId: sharedData.defaultStartEventId.trim() });
+            }
             if (typeof sharedData.eventClockEnabled === 'boolean') {
               set({ eventClockEnabled: sharedData.eventClockEnabled });
               if (typeof window !== 'undefined') {
@@ -1636,6 +1706,7 @@ export const useWaveStore = create<WaveStore>()(
             await setDoc(sharedRef, {
               accessPasscode: eventPasscode,
               passcodeProtectionEnabled: get().passcodeProtectionEnabled,
+              defaultStartEventId: get().defaultStartEventId || DEFAULT_EVENT_ID,
               eventClockEnabled: typeof legacyEventClockEnabled === 'boolean' ? legacyEventClockEnabled : get().eventClockEnabled,
               updatedAt: new Date().toISOString(),
             }, { merge: true });
@@ -1658,7 +1729,7 @@ export const useWaveStore = create<WaveStore>()(
       },
 
       // Load data from Firebase on app startup (with caching)
-      loadAll: async () => {
+      loadAll: async (options = {}) => {
         const state = get();
         const FRESHNESS_TTL_MS = 30_000; // 30 seconds
         const age = state.lastFirebaseSync ? Date.now() - state.lastFirebaseSync : Infinity;
@@ -1670,7 +1741,7 @@ export const useWaveStore = create<WaveStore>()(
         secureLogger.log('🔄 Loading fresh data from Firebase...');
 
         // Ensure active event and event list are loaded first
-        await get().loadEventsCatalog();
+        await get().loadEventsCatalog(options);
         
         // Load global config first
         await get().loadGlobalConfig();
@@ -1720,10 +1791,12 @@ export const useWaveStore = create<WaveStore>()(
             secureLogger.log('✅ Set waves in store, current wave:', firstId);
           } else {
             set({ 
+              waves: {},
+              currentWaveId: null,
               isDataLoaded: true,
               lastFirebaseSync: Date.now()
             });
-            secureLogger.log('✅ No waves found, marked as loaded');
+            secureLogger.log('✅ No waves found, cleared local waves and marked as loaded');
           }
         } catch (e) {
           console.error('Error loading waves:', e);
@@ -1749,7 +1822,7 @@ export const useWaveStore = create<WaveStore>()(
           currentWaveId: null,
           activeWaves: new Set()
         });
-        await get().loadAll();
+        await get().loadAll({ preserveActiveEvent: true });
         console.log('✅ Cache cleared and fresh data loaded from Firebase');
       },
 
@@ -2100,6 +2173,7 @@ export const useWaveStore = create<WaveStore>()(
                 name: participant.name,
                 waveData: updatedWaveData,
                 includeInLeaderboard: participant.includeInLeaderboard !== false, // Default to true unless explicitly false
+                pingGroupOptIn: participant.pingGroupOptIn === true,
                 updatedAt: new Date().toISOString()
               }, { merge: true });
             }
@@ -2143,6 +2217,7 @@ export const useWaveStore = create<WaveStore>()(
             name: participant.name,
             waveData: participant.waveData,
             includeInLeaderboard: participant.includeInLeaderboard !== false,
+            pingGroupOptIn: participant.pingGroupOptIn === true,
             updatedAt: new Date().toISOString(),
           }, { merge: true });
         }
@@ -2258,6 +2333,9 @@ export const useWaveStore = create<WaveStore>()(
           }
           if (typeof state.passcodeProtectionEnabled !== 'boolean') {
             state.passcodeProtectionEnabled = process.env.NEXT_PUBLIC_ENABLE_PASSCODE_PROTECTION === 'true';
+          }
+          if (!state.defaultStartEventId) {
+            state.defaultStartEventId = DEFAULT_EVENT_ID;
           }
           if (!state.alertSettings) {
             state.alertSettings = {

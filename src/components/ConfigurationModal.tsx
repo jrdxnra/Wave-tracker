@@ -173,7 +173,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setTimingConfig, setMaxParticipants, setWorkoutTimerConfig, setEventConfig, setAccessPasscode,
     loadGlobalConfig, eventBranding, eventClockEnabled, setEventClockEnabled, themeColors,
     eventsCatalog, activeEventId, loadEventsCatalog, createEvent, deleteEvent, setActiveEvent, updateEventBranding,
-    feedbackEnabled, setFeedbackEnabled, loadFeedbackEntries, passcodeProtectionEnabled, setPasscodeProtectionEnabled
+    feedbackEnabled, setFeedbackEnabled, loadFeedbackEntries, passcodeProtectionEnabled, setPasscodeProtectionEnabled,
+    defaultStartEventId, setDefaultStartEventId
   } = useWaveStore();
   
   const [activeTab, setActiveTab] = useState<'movement' | 'event' | 'security'>(initialTab);
@@ -196,6 +197,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [waves, setWaves] = useState<number>(totalWaves);
   const [passcode, setPasscode] = useState<string>(accessPasscode);
   const [passcodeProtectionEnabledLocal, setPasscodeProtectionEnabledLocal] = useState<boolean>(passcodeProtectionEnabled);
+  const [defaultStartEventIdLocal, setDefaultStartEventIdLocal] = useState<string>(defaultStartEventId);
   const [feedbackEnabledLocal, setFeedbackEnabledLocal] = useState<boolean>(feedbackEnabled);
   const [pinnedFormUrl, setPinnedFormUrl] = useState('');
   const [pinnedSheetUrl, setPinnedSheetUrl] = useState('');
@@ -220,6 +222,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [isCreatingWaves, setIsCreatingWaves] = useState(false);
   const [isDownloadingFeedback, setIsDownloadingFeedback] = useState(false);
   const [isUpdatingPasscodeToggle, setIsUpdatingPasscodeToggle] = useState(false);
+  const [isUpdatingDefaultStartEvent, setIsUpdatingDefaultStartEvent] = useState(false);
   const [isUpdatingFeedbackToggle, setIsUpdatingFeedbackToggle] = useState(false);
   const [isSwitchingEvent, setIsSwitchingEvent] = useState(false);
   const [isHydratingConfig, setIsHydratingConfig] = useState(false);
@@ -252,7 +255,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
     void (async () => {
       try {
-        await loadEventsCatalog();
+        await loadEventsCatalog({ preserveActiveEvent: true });
         await loadGlobalConfig();
       } finally {
         if (!isCancelled) {
@@ -283,8 +286,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setWaves(totalWaves);
     setPasscode(accessPasscode);
     setPasscodeProtectionEnabledLocal(passcodeProtectionEnabled);
+    setDefaultStartEventIdLocal(defaultStartEventId);
     setFeedbackEnabledLocal(feedbackEnabled);
-  }, [customEvents, movementUnits, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode, passcodeProtectionEnabled, feedbackEnabled]);
+  }, [customEvents, movementUnits, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode, passcodeProtectionEnabled, defaultStartEventId, feedbackEnabled]);
 
   useEffect(() => {
     setMovementIntervalsLocal((prev) => {
@@ -750,6 +754,20 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     }
   };
 
+  const handleDefaultStartEventChange = async (nextEventId: string) => {
+    setDefaultStartEventIdLocal(nextEventId);
+    setIsUpdatingDefaultStartEvent(true);
+    try {
+      await setDefaultStartEventId(nextEventId);
+    } catch (error) {
+      console.error('❌ Failed to update default start event:', error);
+      setDefaultStartEventIdLocal(defaultStartEventId);
+      alert('Failed to update default start event. Please try again.');
+    } finally {
+      setIsUpdatingDefaultStartEvent(false);
+    }
+  };
+
   const getAppOrigin = () => {
     if (typeof window === 'undefined') return '';
     return window.location.origin;
@@ -920,6 +938,26 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 disabled={!passcodeProtectionEnabledLocal}
                 className="w-full p-2 border border-gray-300 rounded-md input-focus-brand"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Default Event On Site Open</label>
+              <select
+                value={defaultStartEventIdLocal}
+                onChange={(e) => {
+                  void handleDefaultStartEventChange(e.target.value);
+                }}
+                disabled={isUpdatingDefaultStartEvent || isCreatingNewEvent}
+                className="w-full p-2 border border-gray-300 rounded-md input-focus-brand disabled:cursor-not-allowed disabled:bg-gray-100"
+              >
+                {eventsCatalog.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-600">
+                {isUpdatingDefaultStartEvent ? 'Saving default event...' : 'This event opens by default when the site is loaded.'}
+              </p>
             </div>
           </div>
         </div>
@@ -1139,45 +1177,51 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           </div>
         </div>
 
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
-          <div>
-            <div className="text-sm font-semibold text-gray-900">Create Waves</div>
-            <div className="text-xs text-gray-600">
-              Creates the wave docs from start date, start time, total waves, and interval.
+        <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">Create Waves</div>
+                <div className="text-xs text-gray-600">
+                  Creates the wave docs from start date, start time, total waves, and interval.
+                </div>
+              </div>
+              <div className="w-full sm:max-w-[220px]">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Wave Start Interval (min)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={interval}
+                  onChange={(e) => setInterval(parseInt(e.target.value || '1', 10))}
+                  className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleCreateConfiguredWaves();
+                }}
+                disabled={!waveScheduleReady || isCreatingWaves || isSwitchingEvent || isHydratingConfig}
+                className={`rounded-md px-4 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  waveScheduleReady ? 'hover:brightness-110' : ''
+                }`}
+                style={{ backgroundColor: waveScheduleReady ? themeColors.accent : '#9ca3af' }}
+              >
+                {isCreatingWaves
+                  ? 'Creating...'
+                  : missingWaveTimes.length > 0
+                    ? `Create / Sync Waves (${missingWaveTimes.length} missing)`
+                    : `Waves Ready (${expectedWaveTimes.length})`
+                }
+              </button>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              void handleCreateConfiguredWaves();
-            }}
-            disabled={!waveScheduleReady || isCreatingWaves || isSwitchingEvent || isHydratingConfig}
-            className={`rounded-md px-4 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-              waveScheduleReady ? 'hover:brightness-110' : ''
-            }`}
-            style={{ backgroundColor: waveScheduleReady ? themeColors.accent : '#9ca3af' }}
-          >
-            {isCreatingWaves
-              ? 'Creating...'
-              : missingWaveTimes.length > 0
-                ? `Create / Sync Waves (${missingWaveTimes.length} missing)`
-                : `Waves Ready (${expectedWaveTimes.length})`
-            }
-          </button>
         </div>
 
         {movementTimingModeLocal === 'global' && (
-          <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Wave Start Interval (min)</label>
-              <input
-                type="number"
-                min={1}
-                value={interval}
-                onChange={(e) => setInterval(parseInt(e.target.value || '1', 10))}
-                className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
-              />
-            </div>
+          <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Work (min)</label>
               <input
@@ -1662,7 +1706,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           >
             <div className="flex flex-row flex-nowrap items-center gap-x-2 pb-0">
               <h2 className="text-2xl font-semibold text-gray-900">Configuration</h2>
-              <div className="flex flex-row flex-nowrap gap-x-1 ml-2 w-full">
+              <div className="flex min-w-0 flex-1 flex-row flex-nowrap items-center gap-x-2 ml-2">
                 <select
                   value={selectedEventId}
                   disabled={isSaving || isSwitchingEvent || isHydratingConfig}
@@ -1697,8 +1741,25 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   <option value={CREATE_NEW_EVENT_OPTION}>+ Create New Event</option>
                 </select>
                 <button
+                  type="button"
+                  onClick={() => {
+                    const targetEventId = selectedEventId === CREATE_NEW_EVENT_OPTION ? activeEventId : selectedEventId;
+                    if (!targetEventId || targetEventId === CREATE_NEW_EVENT_OPTION) return;
+                    void handleDefaultStartEventChange(targetEventId);
+                  }}
+                  disabled={
+                    isUpdatingDefaultStartEvent
+                    || selectedEventId === CREATE_NEW_EVENT_OPTION
+                    || (selectedEventId === defaultStartEventIdLocal)
+                  }
+                  className="shrink-0 rounded-md border border-emerald-700 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Set selected event as primary default event"
+                >
+                  {isUpdatingDefaultStartEvent ? 'Saving...' : 'Set Primary'}
+                </button>
+                <button
                   onClick={onClose}
-                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                  className="ml-auto text-gray-400 hover:text-gray-600 text-2xl font-bold leading-none"
                 >
                   ×
                 </button>
