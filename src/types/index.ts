@@ -3,6 +3,7 @@ export interface Participant {
   name: string;
   waveData: Record<string, string>;
   includeInLeaderboard?: boolean; // Optional for backwards compatibility
+  pingGroupOptIn?: boolean; // Optional for backwards compatibility
 }
 
 export type MovementUnit = 'reps' | 'laps' | 'cals' | 'meters' | 'seconds' | 'rounds';

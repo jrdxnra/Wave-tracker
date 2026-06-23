@@ -1,0 +1,107 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="70" x2="1780" y2="1010" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#F5F3FF"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(260 900) rotate(16) scale(560 440)">
+      <stop stop-color="#EA580C" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#EA580C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1610 180) rotate(20) scale(520 360)">
+      <stop stop-color="#059669" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#059669" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brand" x1="846" y1="140" x2="1836" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C2410C"/>
+      <stop offset="0.5" stop-color="#EA580C"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="capacityOk" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#D1FAE5"/>
+      <stop offset="1" stop-color="#A7F3D0"/>
+    </linearGradient>
+    <linearGradient id="capacityAt" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FEF3C7"/>
+      <stop offset="1" stop-color="#FDE68A"/>
+    </linearGradient>
+    <filter id="cardShadow" x="0" y="0" width="1920" height="1080" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#1E293B" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#glowA)"/>
+  <rect width="1920" height="1080" fill="url(#glowB)"/>
+
+
+
+  <g filter="url(#cardShadow)">
+    <rect x="828" y="96" width="1044" height="888" rx="30" fill="#FFFFFF"/>
+  </g>
+
+  <rect x="864" y="132" width="972" height="142" rx="18" fill="url(#brand)"/>
+  <text x="1350" y="190" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="42" font-weight="700">Wave Tab Execution</text>
+  <text x="1350" y="228" text-anchor="middle" fill="#FED7AA" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="500">Manage wave based events with ease</text>
+
+  <rect x="864" y="304" width="972" height="62" rx="14" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <rect x="888" y="318" width="178" height="34" rx="10" fill="#FFF7ED" stroke="#FDBA74"/>
+  <text x="977" y="340" text-anchor="middle" fill="#9A3412" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">Start Time 8:00 AM</text>
+  <rect x="1080" y="318" width="172" height="34" rx="10" fill="#ECFDF5" stroke="#6EE7B7"/>
+  <text x="1166" y="340" text-anchor="middle" fill="#065F46" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">Interval 15 min</text>
+  <rect x="1266" y="318" width="208" height="34" rx="10" fill="#EFF6FF" stroke="#93C5FD"/>
+  <text x="1370" y="340" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">Adjustable Capacity</text>
+  <rect x="1488" y="318" width="124" height="34" rx="10" fill="#FEF2F2" stroke="#FCA5A5"/>
+  <text x="1550" y="340" text-anchor="middle" fill="#B91C1C" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">Print Sheets</text>
+  <rect x="1626" y="318" width="186" height="34" rx="10" fill="#FFF7ED" stroke="#FDBA74"/>
+  <text x="1719" y="340" text-anchor="middle" fill="#9A3412" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">+ Add Wave</text>
+
+  <rect x="864" y="386" width="972" height="576" rx="18" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+
+  <rect x="898" y="420" width="448" height="184" rx="16" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="1360" y="420" width="448" height="184" rx="16" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="898" y="618" width="448" height="184" rx="16" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="1360" y="618" width="448" height="184" rx="16" fill="#FFFFFF" stroke="#CBD5E1"/>
+
+  <text x="930" y="462" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">8:00 AM Wave</text>
+  <rect x="1198" y="444" width="112" height="26" rx="13" fill="url(#capacityAt)" stroke="#F59E0B"/>
+  <text x="1254" y="461" text-anchor="middle" fill="#92400E" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">17 / 17</text>
+  <rect x="930" y="490" width="300" height="18" rx="9" fill="#E2E8F0"/>
+  <rect x="930" y="490" width="300" height="18" rx="9" fill="#F59E0B"/>
+  <text x="930" y="534" fill="#475569" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="500">Wave full • directs overflow to next available slot</text>
+  <text x="930" y="562" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="500">Coach assigned • print packet ready</text>
+
+  <text x="1392" y="462" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">8:15 AM Wave</text>
+  <rect x="1660" y="444" width="112" height="26" rx="13" fill="url(#capacityOk)" stroke="#34D399"/>
+  <text x="1716" y="461" text-anchor="middle" fill="#065F46" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">14 / 17</text>
+  <rect x="1392" y="490" width="300" height="18" rx="9" fill="#E2E8F0"/>
+  <rect x="1392" y="490" width="247" height="18" rx="9" fill="#059669"/>
+  <text x="1392" y="534" fill="#475569" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="500">Cadence preserved at 15-minute launch interval</text>
+  <text x="1392" y="562" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="500">Deck traffic remains balanced</text>
+
+  <text x="930" y="660" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">8:30 AM Wave</text>
+  <rect x="1198" y="642" width="112" height="26" rx="13" fill="url(#capacityOk)" stroke="#34D399"/>
+  <text x="1254" y="659" text-anchor="middle" fill="#065F46" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">11 / 17</text>
+  <rect x="930" y="688" width="300" height="18" rx="9" fill="#E2E8F0"/>
+  <rect x="930" y="688" width="194" height="18" rx="9" fill="#059669"/>
+  <text x="930" y="732" fill="#475569" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">Participants</text>
+  <text x="930" y="756" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="500">• Jordan Lee</text>
+  <text x="930" y="778" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="500">• Priya Patel</text>
+  <text x="1088" y="756" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="500">• Mateo Garcia</text>
+  <text x="1088" y="778" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="500">• Zoe Kim</text>
+
+  <text x="1392" y="660" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">8:45 AM Wave</text>
+  <rect x="1660" y="642" width="112" height="26" rx="13" fill="url(#capacityOk)" stroke="#34D399"/>
+  <text x="1716" y="659" text-anchor="middle" fill="#065F46" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">9 / 17</text>
+  <rect x="1392" y="688" width="300" height="18" rx="9" fill="#E2E8F0"/>
+  <rect x="1392" y="688" width="160" height="18" rx="9" fill="#059669"/>
+  <text x="1392" y="732" fill="#475569" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">Participants</text>
+  <text x="1392" y="756" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="500">• Avery Nguyen</text>
+  <text x="1392" y="778" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="500">• Noah Rivera</text>
+  <text x="1556" y="756" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="500">• Emma Clarke</text>
+  <text x="1556" y="778" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="500">• Liam Brooks</text>
+
+  <rect x="898" y="816" width="910" height="118" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-dasharray="8 8"/>
+  <text x="930" y="858" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="600">Event Notes &amp; Details are saved manually from the Wave page controls.</text>
+  <text x="930" y="886" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="600">Use this area for deck callouts, cancellations, and same-day execution notes.</text>
+</svg>

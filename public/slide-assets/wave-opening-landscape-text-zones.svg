@@ -1,0 +1,74 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="140" y1="80" x2="1780" y2="980" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#EEF2FF"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(220 860) rotate(16) scale(520 420)">
+      <stop stop-color="#2563EB" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1640 200) rotate(22) scale(540 390)">
+      <stop stop-color="#38BDF8" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brand" x1="842" y1="168" x2="1606" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.5" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <filter id="shadowApp" x="0" y="0" width="1920" height="1080" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#1E293B" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#glowA)"/>
+  <rect width="1920" height="1080" fill="url(#glowB)"/>
+
+  <rect x="48" y="42" width="740" height="996" rx="30" fill="#FFFFFF" fill-opacity="0.5" stroke="#CBD5E1" stroke-opacity="0.65" stroke-width="2"/>
+
+  <rect x="88" y="84" width="660" height="130" rx="16" fill="#FFFFFF" fill-opacity="0.8" stroke="#94A3B8" stroke-width="2"/>
+
+  <rect x="88" y="250" width="660" height="324" rx="18" fill="#FFFFFF" fill-opacity="0.78" stroke="#94A3B8" stroke-width="2"/>
+
+  <rect x="88" y="608" width="660" height="376" rx="18" fill="#FFFFFF" fill-opacity="0.78" stroke="#94A3B8" stroke-width="2"/>
+
+  <g filter="url(#shadowApp)">
+    <rect x="806" y="104" width="1066" height="872" rx="28" fill="#FFFFFF"/>
+  </g>
+
+  <rect x="842" y="140" width="994" height="146" rx="18" fill="url(#brand)"/>
+  <text x="1339" y="200" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="42" font-weight="700">Wave Tracker</text>
+  <text x="1339" y="238" text-anchor="middle" fill="#DBEAFE" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="500">Manage wave based events with ease</text>
+
+  <rect x="842" y="320" width="994" height="78" rx="14" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <rect x="868" y="334" width="140" height="50" rx="10" fill="#2563EB"/>
+  <text x="938" y="366" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">Waves</text>
+  <rect x="1024" y="334" width="192" height="50" rx="10" fill="#F1F5F9"/>
+  <text x="1120" y="366" text-anchor="middle" fill="#475569" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">Registrations</text>
+
+  <rect x="1608" y="334" width="98" height="50" rx="10" fill="#2563EB"/>
+  <text x="1657" y="366" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">Form</text>
+  <rect x="1716" y="334" width="98" height="50" rx="10" fill="#2563EB"/>
+  <text x="1765" y="366" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">Sheet</text>
+
+  <rect x="842" y="430" width="994" height="510" rx="18" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+
+  <rect x="878" y="466" width="218" height="166" rx="16" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="1118" y="466" width="218" height="166" rx="16" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="1358" y="466" width="218" height="166" rx="16" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="1598" y="466" width="218" height="166" rx="16" fill="#EFF6FF" stroke="#BFDBFE"/>
+
+  <text x="987" y="560" text-anchor="middle" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">6:00 AM</text>
+  <text x="1227" y="560" text-anchor="middle" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">6:15 AM</text>
+  <text x="1467" y="560" text-anchor="middle" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">6:30 AM</text>
+  <text x="1707" y="548" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="56" font-weight="700">+</text>
+  <text x="1707" y="590" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">Add Wave</text>
+
+  <rect x="878" y="666" width="938" height="240" rx="16" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="910" y="712" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">Event Notes and Details</text>
+  <rect x="910" y="734" width="874" height="112" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+  <rect x="1512" y="856" width="272" height="50" rx="10" fill="#2563EB"/>
+  <text x="1648" y="888" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="21" font-weight="700">Save Notes</text>
+</svg>

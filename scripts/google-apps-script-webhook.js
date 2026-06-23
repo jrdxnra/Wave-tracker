@@ -6,7 +6,8 @@ const APP_BACKEND_URL = "https://wavetracker.web.app/api/register";
 
 // Allowed response sheet tab names.
 const RESPONSE_SHEET_NAMES = [
-  "[TEST] Super Sprint Registration 2026 (Responses)",
+  "Google Super Sprint Registration 2026 (Responses)",
+  "Google Super Sprint Registration 2026",
   "Form Responses 1"
 ];
 
@@ -20,13 +21,13 @@ const REVERSE_WEBHOOK_SECRET = "WT_REVERSE_SYNC_2026_9f3k2m7q";
 const PULL_SYNC_SECRET = "WT_REVERSE_SYNC_2026_9f3k2m7q";
 
 // Event created/updated in Wave Tracker for this registration feed.
-const APP_EVENT_ID = "super-sprint-registration-2026-test";
+const APP_EVENT_ID = "super-sprint";
 
-// Set true while testing to get detailed execution logs.
-const DEBUG_LOGGING = true;
+// Set true temporarily only when troubleshooting in production.
+const DEBUG_LOGGING = false;
 
-// Time-driven trigger cadence. Use 1 minute for testing, 5 for normal operation.
-const TIME_DRIVEN_TRIGGER_MINUTES = 1;
+// Time-driven trigger cadence. 5 minutes is the production default.
+const TIME_DRIVEN_TRIGGER_MINUTES = 5;
 
 const HEADER_MATCHERS = {
   timestamp: [/^timestamp$/],
@@ -161,6 +162,8 @@ function onEditTrigger(e) {
       colMap.reg_status,
       colMap.confirmed_wave,
       colMap.chat_link,
+      colMap.ping_group,
+      colMap.include_in_leaderboard,
       colMap.volunteer_role,
       colMap.internal_notes
     ].filter(Boolean);
@@ -265,90 +268,6 @@ function logInstalledTriggers() {
 }
 
 /**
- * Resets the new-registration sync cursor so the next run can re-scan rows.
- * Pass a row number (>=1). Default is 1.
- */
-function resetNewRegistrationSyncCursor(toRow) {
-  const sheet = getResponseSheet();
-  if (!sheet) {
-    throw new Error('No response sheet found.');
-  }
-
-  const props = PropertiesService.getScriptProperties();
-  const key = 'LAST_SYNCED_ROW_' + sheet.getSheetId();
-  const next = Math.max(1, Number(toRow) || 1);
-  props.setProperty(key, String(next));
-
-  debugLog('resetNewRegistrationSyncCursor: updated', {
-    key: key,
-    row: next
-  });
-}
-
-/**
- * Quick diagnostics for new-row sync status and header mapping.
- */
-function diagnoseRegistrationSync() {
-  const sheet = getResponseSheet();
-  if (!sheet) {
-    debugLog('diagnoseRegistrationSync: no response sheet found');
-    return;
-  }
-
-  const colMap = buildColumnMap(sheet);
-  const props = PropertiesService.getScriptProperties();
-  const key = 'LAST_SYNCED_ROW_' + sheet.getSheetId();
-  const lastSynced = Number(props.getProperty(key) || 1);
-
-  debugLog('diagnoseRegistrationSync', {
-    sheet: sheet.getName(),
-    lastRow: sheet.getLastRow(),
-    lastSyncedRow: lastSynced,
-    syncCursorKey: key,
-    mappedColumns: colMap
-  });
-}
-
-/**
- * Manual utility for stress tests: push an entire row range to the backend.
- * Run from Apps Script editor after bulk pasting test rows.
- */
-function backfillPastedRows(startRow, endRow) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) throw new Error("No active spreadsheet");
-
-  const sheet = ss.getSheets().find(function (s) {
-    return isAllowedResponseSheet(s.getName());
-  });
-
-  if (!sheet) {
-    throw new Error("No allowed response sheet found. Check RESPONSE_SHEET_NAMES.");
-  }
-
-  const colMap = buildColumnMap(sheet);
-  const first = Math.max(2, Number(startRow) || 2);
-  const last = Math.max(first, Number(endRow) || sheet.getLastRow());
-
-  debugLog("backfillPastedRows: start", {
-    sheet: sheet.getName(),
-    startRow: first,
-    endRow: last
-  });
-
-  for (let row = first; row <= last; row += 1) {
-    const nameValue = safeString(sheet.getRange(row, colMap.name || 1).getValue());
-    if (!nameValue) continue;
-    // Use form_submit mode so replayed rows can auto-allocate when not yet assigned.
-    sendPayload(sheet, row, colMap, "form_submit");
-  }
-
-  debugLog("backfillPastedRows: complete", {
-    startRow: first,
-    endRow: last
-  });
-}
-
-/**
  * Time-driven auto sync for newly added sheet rows.
  * Recommended trigger cadence: every 5 minutes.
  */
@@ -391,31 +310,6 @@ function syncNewRegistrationsFromSheet() {
     endRow: sheetLastRow,
     processed: processed
   });
-}
-
-/**
- * Manual recovery helper: replay one sheet row through auto-allocation path.
- * Useful when a specific form row did not sync.
- */
-function replayRowAsFormSubmit(rowNumber) {
-  const sheet = getResponseSheet();
-  if (!sheet) {
-    throw new Error('No response sheet found.');
-  }
-
-  const row = Number(rowNumber || 0);
-  if (!row || row <= 1) {
-    throw new Error('rowNumber must be >= 2');
-  }
-
-  const colMap = buildColumnMap(sheet);
-  const nameValue = safeString(sheet.getRange(row, colMap.name || 1).getValue());
-  if (!nameValue) {
-    throw new Error('Selected row has no participant name.');
-  }
-
-  sendPayload(sheet, row, colMap, 'form_submit');
-  debugLog('replayRowAsFormSubmit: replayed row', { row: row, name: nameValue });
 }
 
 function sendPayload(sheet, row, colMap, triggerSource) {
@@ -462,7 +356,8 @@ function sendPayload(sheet, row, colMap, triggerSource) {
     calendar_invite_sent: toBoolean(getCell(values, colMap, 'calendar_sent')),
     include_in_leaderboard: optIns.includeInLeaderboard,
     volunteer_role: safeString(getCell(values, colMap, 'volunteer_role')),
-    internal_notes: safeString(getCell(values, colMap, 'internal_notes'))
+    internal_notes: safeString(getCell(values, colMap, 'internal_notes')),
+    portal_url: safeString(getCell(values, colMap, 'portal_url'))
   };
 
 
@@ -573,8 +468,9 @@ function parseCommunityOptIns(rawPingGroupValue, rawLeaderboardValue) {
     return /leaderboard|results|rankings?/.test(option);
   });
 
-  // Explicit separate leaderboard field wins when present.
-  const explicitLeaderboard = rawLeaderboardValue !== null && rawLeaderboardValue !== undefined
+  // Use explicit leaderboard field only when combined opt-in answer is empty.
+  const leaderboardRaw = safeString(rawLeaderboardValue);
+  const explicitLeaderboard = leaderboardRaw
     ? toBoolean(rawLeaderboardValue)
     : null;
 
@@ -585,13 +481,15 @@ function parseCommunityOptIns(rawPingGroupValue, rawLeaderboardValue) {
     };
   }
 
-  // If question is a multi-select and no tokens matched, treat it as opted out.
   const hasMultiSelectSignal = options.length > 0;
+  const hasCombinedAnswer = pingRaw.length > 0;
 
   const pingGroupOptIn = hasChatOption || (!hasMultiSelectSignal && toBoolean(rawPingGroupValue));
-  const includeInLeaderboard = explicitLeaderboard !== null
-    ? explicitLeaderboard
-    : (hasLeaderboardOption || (!hasMultiSelectSignal ? true : false));
+  const includeInLeaderboard = hasCombinedAnswer
+    ? hasLeaderboardOption
+    : (explicitLeaderboard !== null
+      ? explicitLeaderboard
+      : (!hasMultiSelectSignal && toBoolean(rawPingGroupValue)));
 
   return {
     pingGroupOptIn: pingGroupOptIn,

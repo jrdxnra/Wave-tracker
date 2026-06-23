@@ -7,7 +7,7 @@ const {
   deleteDoc,
 } = require('firebase/firestore');
 
-const DEFAULT_EVENT_ID = 'super-sprint-registration-2026-test';
+const DEFAULT_EVENT_ID = 'super-sprint';
 
 function getArgValue(flag) {
   const index = process.argv.findIndex((arg) => arg === flag);

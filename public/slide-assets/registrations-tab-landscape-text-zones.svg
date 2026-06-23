@@ -1,0 +1,162 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="70" x2="1760" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#EEF2FF"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(220 860) rotate(14) scale(520 420)">
+      <stop stop-color="#2563EB" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1600 180) rotate(18) scale(520 380)">
+      <stop stop-color="#38BDF8" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brand" x1="806" y1="150" x2="1760" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.52" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="searchBar" x1="830" y1="323" x2="1760" y2="382" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F8FAFC"/>
+    </linearGradient>
+    <filter id="shadowApp" x="0" y="0" width="1920" height="1080" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#1E293B" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#glowA)"/>
+  <rect width="1920" height="1080" fill="url(#glowB)"/>
+
+  <g filter="url(#shadowApp)">
+    <rect x="68" y="48" width="1784" height="984" rx="30" fill="#FFFFFF"/>
+  </g>
+
+  <rect x="106" y="86" width="1708" height="122" rx="18" fill="url(#brand)"/>
+  <text x="960" y="137" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="44" font-weight="700">Registrations Tab</text>
+  <text x="960" y="171" text-anchor="middle" fill="#DBEAFE" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="500">Search, sort, override, and manage live capacity</text>
+
+  <rect x="106" y="228" width="1708" height="64" rx="16" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <rect x="128" y="242" width="1120" height="36" rx="12" fill="url(#searchBar)" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="150" y="265" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="500">Search participants by name, wave, waitlist, or status...</text>
+  <rect x="1300" y="240" width="100" height="38" rx="10" fill="#2563EB"/>
+  <text x="1350" y="264" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">Filter</text>
+  <rect x="1410" y="240" width="84" height="38" rx="10" fill="#E2E8F0"/>
+  <text x="1452" y="264" text-anchor="middle" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">All</text>
+  <rect x="1510" y="240" width="124" height="38" rx="10" fill="#E2E8F0"/>
+  <text x="1572" y="264" text-anchor="middle" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">Status</text>
+  <rect x="1648" y="240" width="148" height="38" rx="10" fill="#E2E8F0"/>
+  <text x="1722" y="264" text-anchor="middle" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">Wave Time</text>
+
+  <rect x="106" y="308" width="1218" height="678" rx="18" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <rect x="140" y="340" width="1150" height="34" rx="8" fill="#F8FAFC"/>
+  <text x="160" y="363" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Participant</text>
+  <text x="638" y="363" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Status</text>
+  <text x="792" y="363" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Assigned Wave</text>
+  <text x="952" y="363" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Prefs</text>
+  <text x="1098" y="363" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Actions</text>
+
+  <rect x="140" y="386" width="1150" height="56" rx="14" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <circle cx="182" cy="414" r="16" fill="#DBEAFE"/>
+  <text x="182" y="420" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">AJ</text>
+  <text x="198" y="419" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">Alex Johnson</text>
+  <rect x="592" y="402" width="98" height="28" rx="14" fill="#FEF3C7" stroke="#F59E0B"/>
+  <text x="641" y="421" text-anchor="middle" fill="#92400E" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">Waitlisted</text>
+  <rect x="768" y="402" width="78" height="28" rx="14" fill="#EFF6FF" stroke="#93C5FD"/>
+  <text x="807" y="421" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">6:00 AM</text>
+  <text x="934" y="420" fill="#475569" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="500">6:00 AM</text>
+  <rect x="1076" y="400" width="50" height="28" rx="8" fill="#2563EB"/>
+  <text x="1101" y="419" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">Auto</text>
+  <rect x="1134" y="400" width="112" height="28" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="1150" y="419" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="500">6:00 AM</text>
+  <rect x="1252" y="400" width="46" height="28" rx="8" fill="#2563EB"/>
+  <text x="1275" y="419" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">Set</text>
+
+  <rect x="140" y="456" width="1150" height="56" rx="14" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <circle cx="182" cy="484" r="16" fill="#DCFCE7"/>
+  <text x="182" y="490" text-anchor="middle" fill="#047857" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">MR</text>
+  <text x="198" y="489" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">Maria Rodriguez</text>
+  <rect x="592" y="472" width="96" height="28" rx="14" fill="#DBEAFE" stroke="#60A5FA"/>
+  <text x="640" y="491" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">Confirmed</text>
+  <rect x="768" y="472" width="78" height="28" rx="14" fill="#EFF6FF" stroke="#93C5FD"/>
+  <text x="807" y="491" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">6:15 AM</text>
+  <text x="934" y="490" fill="#475569" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="500">Within 15m</text>
+  <rect x="1076" y="470" width="50" height="28" rx="8" fill="#2563EB"/>
+  <text x="1101" y="489" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">Auto</text>
+  <rect x="1134" y="470" width="112" height="28" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="1150" y="489" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="500">6:15 AM</text>
+  <rect x="1252" y="470" width="46" height="28" rx="8" fill="#2563EB"/>
+  <text x="1275" y="489" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">Set</text>
+
+  <rect x="140" y="526" width="1150" height="56" rx="14" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <circle cx="182" cy="554" r="16" fill="#E0E7FF"/>
+  <text x="182" y="560" text-anchor="middle" fill="#4338CA" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">DC</text>
+  <text x="198" y="559" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">David Chen</text>
+  <rect x="592" y="542" width="92" height="28" rx="14" fill="#E9D5FF" stroke="#A855F7"/>
+  <text x="638" y="561" text-anchor="middle" fill="#6B21A8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">Manual</text>
+  <rect x="768" y="542" width="78" height="28" rx="14" fill="#EFF6FF" stroke="#93C5FD"/>
+  <text x="807" y="561" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">6:30 AM</text>
+  <text x="934" y="560" fill="#475569" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="500">Exact start</text>
+  <rect x="1076" y="540" width="50" height="28" rx="8" fill="#2563EB"/>
+  <text x="1101" y="559" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">Auto</text>
+  <rect x="1134" y="540" width="112" height="28" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="1150" y="559" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="500">6:30 AM</text>
+  <rect x="1252" y="540" width="46" height="28" rx="8" fill="#2563EB"/>
+  <text x="1275" y="559" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">Set</text>
+
+  <rect x="140" y="596" width="1150" height="56" rx="14" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <circle cx="182" cy="624" r="16" fill="#FEE2E2"/>
+  <text x="182" y="630" text-anchor="middle" fill="#B91C1C" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">EW</text>
+  <text x="198" y="629" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">Emily White</text>
+  <rect x="592" y="612" width="86" height="28" rx="14" fill="#F3F4F6" stroke="#D1D5DB"/>
+  <text x="635" y="631" text-anchor="middle" fill="#374151" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">Pending</text>
+  <rect x="768" y="612" width="78" height="28" rx="14" fill="#EFF6FF" stroke="#93C5FD"/>
+  <text x="807" y="631" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">6:45 AM</text>
+  <text x="934" y="630" fill="#475569" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="500">No preference</text>
+  <rect x="1076" y="610" width="50" height="28" rx="8" fill="#2563EB"/>
+  <text x="1101" y="629" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">Auto</text>
+  <rect x="1134" y="610" width="112" height="28" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="1150" y="629" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="500">6:45 AM</text>
+  <rect x="1252" y="610" width="46" height="28" rx="8" fill="#2563EB"/>
+  <text x="1275" y="629" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">Set</text>
+
+  <rect x="140" y="684" width="1150" height="246" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-dasharray="8 8"/>
+
+  <rect x="1428" y="308" width="386" height="678" rx="18" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="1454" y="352" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">Mini Wave Tracker</text>
+
+  <rect x="1454" y="382" width="334" height="36" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="1474" y="405" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">6:00 AM</text>
+  <text x="1766" y="405" text-anchor="end" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">8/10</text>
+  <rect x="1454" y="426" width="334" height="36" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="1474" y="449" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">6:15 AM</text>
+  <text x="1766" y="449" text-anchor="end" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">6/10</text>
+  <rect x="1454" y="470" width="334" height="36" rx="10" fill="#EFF6FF" stroke="#BFDBFE"/>
+  <text x="1474" y="493" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">6:30 AM</text>
+  <text x="1766" y="493" text-anchor="end" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">10/10</text>
+  <rect x="1454" y="514" width="334" height="36" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="1474" y="537" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">6:45 AM</text>
+  <text x="1766" y="537" text-anchor="end" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">7/10</text>
+  <rect x="1454" y="558" width="334" height="36" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="1474" y="581" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">7:00 AM</text>
+  <text x="1766" y="581" text-anchor="end" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">4/10</text>
+  <rect x="1454" y="602" width="334" height="36" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="1474" y="625" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">7:15 AM</text>
+  <text x="1766" y="625" text-anchor="end" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">0/10</text>
+  <rect x="1454" y="646" width="334" height="36" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="1474" y="669" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">7:30 AM</text>
+  <text x="1766" y="669" text-anchor="end" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">0/10</text>
+  <rect x="1454" y="690" width="334" height="36" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="1474" y="713" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">7:45 AM</text>
+  <text x="1766" y="713" text-anchor="end" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">0/10</text>
+  <rect x="1454" y="734" width="334" height="36" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="1474" y="757" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">8:00 AM</text>
+  <text x="1766" y="757" text-anchor="end" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">0/10</text>
+  <rect x="1454" y="778" width="334" height="36" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="1474" y="801" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">8:15 AM</text>
+  <text x="1766" y="801" text-anchor="end" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">0/10</text>
+
+  <rect x="106" y="948" width="1708" height="58" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-dasharray="8 8"/>
+</svg>

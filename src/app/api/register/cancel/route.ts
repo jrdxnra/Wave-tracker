@@ -17,7 +17,7 @@ interface CancelPayload {
   reason?: string;
 }
 
-const DEFAULT_EVENT_ID = 'super-sprint-registration-2026-test';
+const DEFAULT_EVENT_ID = 'super-sprint';
 
 let cachedApp: FirebaseApp | null = null;
 let cachedDb: Firestore | null = null;

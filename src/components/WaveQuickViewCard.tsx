@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { getFirebase } from '@/lib/firebase';
 import { useWaveStore } from '@/store/waveStore';
 import PrintDashboard from './PrintDashboard';
 
@@ -13,6 +15,8 @@ interface WaveQuickViewCardProps {
       name: string;
       waveData: Record<string, string>;
       includeInLeaderboard?: boolean;
+      swimComfort?: string;
+      isFirstTri?: boolean;
     }>;
     startTime: string;
     coach?: string;
@@ -24,13 +28,30 @@ function waveIdFromTime(label: string): string {
 }
 
 export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
-  const { deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, themeColors } = useWaveStore();
+  const { deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, themeColors, activeEventId } = useWaveStore();
   const accent = themeColors.accent;
   const accentHover = themeColors.accentHover;
   const [newName, setNewName] = useState('');
   const [timeHM, setTimeHM] = useState<string>('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingName, setEditingName] = useState(wave.name);
+  const [participantMeta, setParticipantMeta] = useState<Record<string, { swimComfort: string; isFirstTri: boolean }>>({});
+
+  const getSwimComfortCode = (swimComfort: string): string => {
+    const value = String(swimComfort || '').toLowerCase();
+    if (value.includes('novice')) return 'N';
+    if (value.includes('intermediate')) return 'I';
+    if (value.includes('advanced')) return 'A';
+    return '?';
+  };
+
+  const getSwimComfortBadgeClass = (swimComfort: string): string => {
+    const code = getSwimComfortCode(swimComfort);
+    if (code === 'N') return 'bg-amber-100 text-amber-700 border border-amber-200';
+    if (code === 'I') return 'bg-blue-100 text-blue-700 border border-blue-200';
+    if (code === 'A') return 'bg-emerald-100 text-emerald-700 border border-emerald-200';
+    return 'bg-slate-100 text-slate-700 border border-slate-200';
+  };
 
   useEffect(() => {
     // Initialize from stored startTime like "8:10 AM" or "08:10"
@@ -68,6 +89,59 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
   useEffect(() => {
     setEditingName(wave.name);
   }, [wave.name]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadParticipantMeta = async () => {
+      if (!activeEventId || wave.participants.length === 0) {
+        setParticipantMeta({});
+        return;
+      }
+
+      const { db } = getFirebase();
+      const entries = await Promise.all(
+        wave.participants.map(async (participant) => {
+          const fallback = {
+            swimComfort: String(participant.swimComfort || ''),
+            isFirstTri: !!participant.isFirstTri,
+          };
+
+          if (participant.id.startsWith('p-')) {
+            return [participant.id, fallback] as const;
+          }
+
+          try {
+            const regRef = doc(db, 'events', activeEventId, 'registrations', participant.id);
+            const regSnap = await getDoc(regRef);
+            if (!regSnap.exists()) {
+              return [participant.id, fallback] as const;
+            }
+
+            const regData = regSnap.data() as { swimComfort?: string; isFirstTri?: boolean };
+            return [
+              participant.id,
+              {
+                swimComfort: String(regData.swimComfort || fallback.swimComfort),
+                isFirstTri: regData.isFirstTri === undefined ? fallback.isFirstTri : !!regData.isFirstTri,
+              },
+            ] as const;
+          } catch {
+            return [participant.id, fallback] as const;
+          }
+        })
+      );
+
+      if (cancelled) return;
+      setParticipantMeta(Object.fromEntries(entries));
+    };
+
+    void loadParticipantMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeEventId, wave.participants]);
 
   const handleAddParticipant = async () => {
     if (newName.trim()) {
@@ -230,6 +304,33 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
               <div className="flex justify-between items-center text-sm">
                 <span className="inline-flex items-center gap-1 text-gray-900 font-medium">
                   {participant.name}
+                  {(() => {
+                    const meta = participantMeta[participant.id];
+                    const swimComfort = String(meta?.swimComfort || participant.swimComfort || '');
+                    const firstTri = meta?.isFirstTri ?? !!participant.isFirstTri;
+                    return (
+                      <>
+                        {swimComfort && (
+                          <span
+                            className={`inline-flex items-center justify-center h-5 min-w-5 rounded-full px-1 text-[10px] font-bold ${getSwimComfortBadgeClass(swimComfort)}`}
+                            title={`Swim level: ${swimComfort}`}
+                            aria-label={`Swim level ${swimComfort}`}
+                          >
+                            {getSwimComfortCode(swimComfort)}
+                          </span>
+                        )}
+                        {firstTri && (
+                          <span
+                            className="inline-flex items-center justify-center h-5 min-w-5 rounded-full px-1 text-[10px] font-bold bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-200"
+                            title="First triathlon"
+                            aria-label="First triathlon"
+                          >
+                            ★
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
                   {isManualWaveEntry(participant.id) && (
                     <span
                       className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-300 bg-amber-100 text-[10px] font-bold text-amber-800"

@@ -1,0 +1,87 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="140" y1="80" x2="1780" y2="1020" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#F1F5F9"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(260 860) rotate(16) scale(560 420)">
+      <stop stop-color="#EA580C" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#EA580C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1620 190) rotate(18) scale(520 340)">
+      <stop stop-color="#2563EB" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="header" x1="118" y1="98" x2="1802" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9A3412"/>
+      <stop offset="0.55" stop-color="#C2410C"/>
+      <stop offset="1" stop-color="#EA580C"/>
+    </linearGradient>
+    <filter id="cardShadow" x="0" y="0" width="1920" height="1080" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#glowA)"/>
+  <rect width="1920" height="1080" fill="url(#glowB)"/>
+
+  <g filter="url(#cardShadow)">
+    <rect x="78" y="62" width="1764" height="952" rx="30" fill="#FFFFFF"/>
+  </g>
+
+  <rect x="118" y="98" width="1684" height="138" rx="18" fill="url(#header)"/>
+  <text x="960" y="156" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="44" font-weight="700">Performance Scorekeeping</text>
+  <text x="960" y="194" text-anchor="middle" fill="#FFEDD5" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="500">Record workout performance data for all waves</text>
+
+  <rect x="118" y="266" width="1684" height="72" rx="14" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="150" y="310" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">Select Wave</text>
+
+  <rect x="286" y="286" width="118" height="32" rx="10" fill="#EA580C"/>
+  <text x="345" y="307" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Wave 1</text>
+  <rect x="416" y="286" width="118" height="32" rx="10" fill="#EA580C"/>
+  <text x="475" y="307" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Wave 2</text>
+  <rect x="546" y="286" width="118" height="32" rx="10" fill="#EA580C"/>
+  <text x="605" y="307" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Wave 3</text>
+  <rect x="676" y="286" width="118" height="32" rx="10" fill="#EA580C"/>
+  <text x="735" y="307" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Wave 4</text>
+  <rect x="806" y="286" width="118" height="32" rx="10" fill="#EA580C"/>
+  <text x="865" y="307" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Wave 5</text>
+
+  <rect x="118" y="360" width="1684" height="500" rx="18" fill="#FFFFFF" stroke="#E2E8F0"/>
+
+  <rect x="156" y="392" width="516" height="74" rx="14" fill="#F0F9FF" stroke="#BAE6FD"/>
+  <circle cx="194" cy="429" r="14" fill="#BAE6FD"/>
+  <image x="186" y="421" width="16" height="16" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAwFBMVEVHcEz/3F3/3F3/3F3/3F3/3F3/3F3/3F3/3F3/3F3dVR//3F3/3F3dVR/dVR/iWiTrZC7/3F3822D/3F3lXSfxajT/3F3gYCT6dD7dVR/6dD76dD7rYy79slFunMiewbD/3F36dD5VrO7dVR/+0lj8q0BjrOL8rkLvmz/9wk+hwq7iaSj7jkb7fkG/ypPl1XP3uE21x5xvs9j8sUTT0IP02Wb9r0/8lUiKq7zGd1/skDrmdy/yqUa8ioD9p06dlKHgPegoAAAAIHRSTlMAvzBQ30CfgO9g6BCvv2AwQnCPICAQz4qKquXPaJ+v3w6TwFMAAAI+SURBVHja7ZVnk5swEIYFphsbd19LsjT3fr0k+f//Kjqk0SALLBnnw80czwcPY5iHd3dhQd+cpmnadsO8UOJaBlCsfnWLD3mcahrdcuAIt4KlZ4CIcabEZVmqRNJNTMO2NBBQj9QUI1SKpPP9qBypSeJcHol05fJIDZDg9NQiGfRyy9bokW9n+Jqm4ZdMRwhyjMo8LmTYJF1P893iezH0kk4bWQh2Vt7FXlkguQf5Cu0eAaaBTmNDnuJtApguktDlRN2ymVlIhsmJ/JK7uUhKX9hvVQGGvKXK81fpRTBuxRjvuo14LL62pkTTihker7LP2UptL87TGnBjU99KnfgIr4MYTVBu99CLBXLlGcqR2jHjfbbbfczeOZMFPHapiAWaJUBIPpZxILwksuICqlnOIcfMQxRdWJtmseiOehKgzO/TKf4dI4oDoFTdNRGxsu7T9FMEjtgkhuEikRbpD1CmaTonUvfUJ2JkFouW7Ip0mhztjM76KQERrV8kegMBVttVGIbPT3MQ+NEJBNEOCkCE25CwXq3+UJ5Xq3X239UQMcak1XRaomgQnuJ2yD/YbFqPmy0TmbSyk9ww0YCIyLQWk2hzJLoJT8M/SAlM8bQeDlE0Odo9d6GyqEOb/biIMAsgPOz3PRJIAj+3N8jiYLaZ5SXC/Pq8S3iGaODFSxwn44A1G6KMNrhJ7vrvJJq8vCqJUOC9HiLCZI/7TQ/BsfwtPfFbSYR+Rhws3BbnlIqi/0QtqkW1qBbVolr0BUT/AGuDs/9vBF1FAAAAAElFTkSuQmCC" preserveAspectRatio="xMidYMid meet"/>
+  <text x="220" y="435" fill="#0C4A6E" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">Swim</text>
+
+  <rect x="702" y="392" width="516" height="74" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
+  <circle cx="740" cy="429" r="14" fill="#FED7AA"/>
+  <image x="732" y="421" width="16" height="16" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAvVBMVEVHcEzQmHiquMLGOQEpLzMpLzPrYy4pLzMpLzMqLzOlsrwpLzMpLzOyubEsMzcpLzPgXSntZjCquMLpaiz/zU+quMLbUhyrt8CquML6dD76dD7OTx3vdjb+2FuquML/3F3RSRT/3F3711/aUhv80lhueH/+1FrdVR/APw5ncXf2qTnadlDdVR8pLzP/3F35yVX9qz36dD6quMK7vazqiTBBPjrPcEvXyouAPCLNTBbw1m/dbyJXW1LgsVqolkxXF4r4AAAALHRSTlMAEM/+h++fQBHO9HCvIFGfJEpw/jk144NX57tkhl6oopK/2raZ/HTPyre3YE+FQ7kAAAN9SURBVHhe5ZVXd6MwEIWRMRgXHBOXxDUu6aG5p+7//1mrwjBCh9UBk7e9j/LNl7nSzGD8byLTzZM/2iy9ihxv5CeyK3GWPqpXgWP7vwOaAqNiNDKSOIfB5aBZSukf4rgCaCQgjBJXARHaPocoDKOYixhVFApRzquAX/p065QUrmeT8ZZpYnvlq3tMQFEYbyWN7bKVDRhlvQqBg6hZuarIarWaUx5yEHXJGHvbPE3K3/xkm6/SV4UAVZO3aiCU/UugvncBaEw7UhGdxWUJTk+APINMsuX4TF7p12cGW+FQjUoMShyzZEaW5IPKjW4Uz4RhBrFSFR6WecjlQtAxYEpGI4JzBwayNH1Z06Kgu2xBvWfglCzoXnAe4RNlmh8lCiJEuSAItlQ570Fdw6kHoD/KBW3MbLCPIGhq6kkox+8fhTOPvrKcYxC0dSCoReHcR1F0kEGUEzj6aEfkzJHDFMsXxJLpdNvaA2Y1SCeFc2iT95HDkmnl1j45Zj3AwBEXg4t4z00rCCyaTK+bXa4En8U7DSW3Pl4O5xwK/ZxOu5pRUMNaXkFCe0a9LkrKAQGHl9tyi3HcFLAg2cE77+fXFFQ0nPByUg0uNgl2Xotyb7UAp92xAqoWI5AFJ7WSP1kxzucuimZv/NhNvFan7aiYK5g05nxxoA8WmO1zH8Wmyc8fAtRVBtW14PyBGY9W1xi2RDw33SrRl2maSx7uWyJRr7pAIFmLGuq0zUU8elGDkOuDgp5fdokDVVc4zXqj0YX/x35diHg3cNusondR80O9QVVvZkhdgWmkbyZ+7qZtvrgVHXlgnODID5MHbYCXyrGkO2NxauLmLQfb/AwgZv2Wmwm9xhXnSN14LZ2RhQwaNbm3Jk0Keh2ey5G6kb0TT+ek+0Dsqdce9xquNCnobTNQA+YMim7g9hq2ADQAL06K5O3A4sRk8G86hiClIPDipEheC54Pk0FLWMmKAhB6h7yZ2FCjNy8ZZMNTMWyKFnI2GUQgGYAcOGWg6GevkrQgNw906sdx3z8VAcHqv5F/hNOTL5ShqF64QJR62eTJT6T1wpOi8EmBA9J6oclQSkPaKWem8+KIoLDtZY7dS7xGrheHDiWfTRFj6LzqGlFXg+ExymbKMXqvvNjUZaVK78VVq6xPVXovkFBajt6LnyP1E4PSe9U7Uz96qBJeR/4Mqyrg/QsV6FvU1E+hxwAAAABJRU5ErkJggg==" preserveAspectRatio="xMidYMid meet"/>
+  <text x="766" y="435" fill="#7C2D12" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">Bike</text>
+
+  <rect x="1248" y="392" width="516" height="74" rx="14" fill="#ECFDF5" stroke="#6EE7B7"/>
+  <circle cx="1286" cy="429" r="14" fill="#BBF7D0"/>
+  <image x="1278" y="421" width="16" height="16" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAwFBMVEVHcEz/3F3r2pPSt6//3F3oYCr8yljvu23/213/3F3/3F3saTL/3F3/3F3/3F3ocCbM1t39rTb+mzb/2VrwaTP/3F3M1t3/rDP/rTTbXST/3F3/rDPqYy3GOQDN0NPM1t37ekDmXindVR/VSxXXp5X/3F3M1t36dD7+u1PdVR/Jmnn+wFXQtq7/3F3dVR/6dD7N1t3/01jgYi3+xVLVmoP0l0L4iEH/rDP6sk36p0vsZi//vUHTTRHHOQDacEfLiWYqq2SMAAAALXRSTlMAQDD970AQIL+A359Qr3AwfoBSj4Ofsb/vvM+VZrzzYMMQ01v6YEXnr+/f74A1Nb29AAACtElEQVR4Xq3XiVbiMBSA4ZQuaVkFlJFFVNyduTfdWdX3f6shxEjHnmlJ4v8A30lCzi0h/8sb9Pv9gUcMo9OlaEqNnN7lUnZpIHl97sh+6TucKdTThQbLf5vqQn0BmO9tYAzJhtvlcvsTkAWQJNsfgBrA+6KmRLsmiKKDRfWhAGSR0YKI54Bse+kRgx5AFkGD/JD07BpJbX7gHSfKGGNPMyOKWh55ZiIumXT7xD5zzaBzJrsxg57YCiDKufTbDyxtZ8CdTykDAOdBd2c5HFqzfRGXNKFWcoTE4jR3dwOinEOZCuQFQeAdIV8u6JAK1AWA4Ag5wEuYKOGQyvi4aBNRW25MtAYA1TnUOdyZC7kxUaYAteErxxdOwmS5AkS6QeCDTF5GWcQhhawilbFjCTSJWo0L6axYoRVMiGpUUJNWEVpr3Ww6bILvDYpQDtDRnmzfIDCYSIUAutrQTREaUqJdqwj1TKe2+RfAvUIzSDJvvF0cb0QzLeZ2z4hQdq4F9aWzM4KoD7vSisbqTtcByErQQg2RszEqQajh8LLSIaneSPhs9x2604RWnLm6m0nnRRVyQNQcv125hLiCyVfK08gHntMmRBxKK8/WCYD6pO0CLygvkWo9ISalnxEc3+8EXUtMbtd16WlPiNKH81izE4xjxu7Ds2poCLxGUS61QsbsakiuwCo+TsrFjIXVkDzdoPQ4KbbGzQlQh0PD4vlPJND0ecNXRIzD8PqUp4hPKmqlMWIYPtZAXi3UsN8R7VqI+LV/hucph+hJl7sS+jNHTENSF62FaIx4XwvR8QdA9lK58DGiPapxrm0b4w1uzqugGWLNNbod2ek74qbmcdXDuPqse4v0PUaM2T5S1eK+6jrSFh6KUzsMQ49ot0Dex17hNfSh1zRN7TlHRqNrA4fQ0Sicj84elY2/MZ7boRZdBN8AAAAASUVORK5CYII=" preserveAspectRatio="xMidYMid meet"/>
+  <text x="1312" y="435" fill="#064E3B" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">Run / Walk</text>
+
+  <rect x="156" y="478" width="516" height="58" rx="12" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="184" y="497" width="460" height="24" rx="6" fill="#FFFFFF" stroke="#94A3B8"/>
+
+  <rect x="702" y="478" width="516" height="58" rx="12" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="730" y="497" width="460" height="24" rx="6" fill="#FFFFFF" stroke="#94A3B8"/>
+
+  <rect x="1248" y="478" width="516" height="58" rx="12" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="1276" y="497" width="460" height="24" rx="6" fill="#FFFFFF" stroke="#94A3B8"/>
+
+  <rect x="156" y="552" width="516" height="280" rx="14" fill="#F8FAFC"/>
+  <rect x="702" y="552" width="516" height="280" rx="14" fill="#F8FAFC"/>
+  <rect x="1248" y="552" width="516" height="280" rx="14" fill="#F8FAFC"/>
+
+  <rect x="156" y="876" width="1608" height="46" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="186" y="905" fill="#64748B" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600">Last saved: 10:42 AM</text>
+  <rect x="1600" y="883" width="164" height="32" rx="10" fill="#2563EB"/>
+  <text x="1682" y="904" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Save Wave</text>
+
+  <rect x="156" y="936" width="1608" height="44" rx="10" fill="#F8FAFC"/>
+</svg>

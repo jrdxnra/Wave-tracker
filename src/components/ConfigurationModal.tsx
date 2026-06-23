@@ -1236,25 +1236,23 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
         <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-gray-900">Create Waves</div>
-                <div className="text-xs text-gray-600">
-                  Creates the wave docs from start date, start time, total waves, and interval.
-                </div>
+            <div>
+              <div className="text-sm font-semibold text-gray-900">Create Waves</div>
+              <div className="text-xs text-gray-600">
+                Creates the wave docs from start date, start time, total waves, and interval.
               </div>
-              <div className="w-full sm:max-w-[220px]">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Wave Start Interval (min)</label>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="w-full sm:max-w-[180px]">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Wave Start Interval (min)</label>
                 <input
                   type="number"
                   min={1}
                   value={interval}
                   onChange={(e) => setInterval(parseInt(e.target.value || '1', 10))}
-                  className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
+                  className="w-full h-9 px-3 border border-gray-300 rounded-md input-focus-brand"
                 />
               </div>
-            </div>
-            <div className="flex justify-end">
               <button
                 type="button"
                 onClick={() => {

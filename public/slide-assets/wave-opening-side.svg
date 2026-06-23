@@ -1,0 +1,60 @@
+<svg width="1080" height="1350" viewBox="0 0 1080 1350" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="30" y1="40" x2="980" y2="1290" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#E0F2FE"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="140" y1="170" x2="930" y2="260" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.55" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <filter id="shadow" x="70" y="80" width="940" height="1180" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#1E293B" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1080" height="1350" fill="url(#bg)"/>
+  <circle cx="145" cy="1190" r="230" fill="#2563EB" fill-opacity="0.08"/>
+  <circle cx="960" cy="190" r="200" fill="#38BDF8" fill-opacity="0.14"/>
+
+  <g filter="url(#shadow)">
+    <rect x="106" y="102" width="868" height="1126" rx="28" fill="#FFFFFF"/>
+  </g>
+
+  <rect x="142" y="136" width="796" height="146" rx="18" fill="url(#brand)"/>
+  <text x="540" y="198" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="44" font-weight="700">Wave Tracker</text>
+  <text x="540" y="236" text-anchor="middle" fill="#DBEAFE" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="500">Manage wave based events with ease</text>
+
+  <rect x="142" y="314" width="796" height="74" rx="12" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <rect x="164" y="326" width="124" height="50" rx="10" fill="#2563EB"/>
+  <text x="226" y="358" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">Waves</text>
+  <rect x="300" y="326" width="176" height="50" rx="10" fill="#F1F5F9"/>
+  <text x="388" y="358" text-anchor="middle" fill="#475569" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">Registrations</text>
+
+  <rect x="142" y="422" width="796" height="448" rx="16" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+
+  <rect x="174" y="454" width="228" height="170" rx="16" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="426" y="454" width="228" height="170" rx="16" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="678" y="454" width="228" height="170" rx="16" fill="#EFF6FF" stroke="#BFDBFE"/>
+
+  <text x="288" y="550" text-anchor="middle" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">6:00 AM</text>
+  <text x="540" y="550" text-anchor="middle" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">6:15 AM</text>
+  <text x="792" y="538" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="56" font-weight="700">+</text>
+  <text x="792" y="580" text-anchor="middle" fill="#1D4ED8" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">Add Wave</text>
+
+  <rect x="174" y="654" width="732" height="184" rx="14" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="202" y="702" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">Event Notes and Details</text>
+  <rect x="202" y="720" width="676" height="84" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+
+  <rect x="558" y="812" width="320" height="44" rx="9" fill="#2563EB"/>
+  <text x="718" y="840" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">Save Notes</text>
+
+  <rect x="142" y="902" width="796" height="284" rx="16" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="182" y="956" fill="#0F172A" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="700">Core Event Operations</text>
+  <text x="182" y="1000" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600">Waves and Registrations tabs</text>
+  <text x="182" y="1040" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600">Global Roster and Event Hub</text>
+  <text x="182" y="1080" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600">Create printouts and assign 15-minute blocks</text>
+  <text x="182" y="1120" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600">Manage floor traffic and capacity</text>
+  <text x="182" y="1160" fill="#334155" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600">Manual overrides, waitlists, and reschedules</text>
+</svg>
