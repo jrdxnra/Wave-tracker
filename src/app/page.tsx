@@ -14,6 +14,37 @@ import EventPageHeader from '@/components/EventPageHeader';
 import LoadingState from '@/components/LoadingState';
 import RegistrationsTab from '@/components/RegistrationsTab';
 
+function parseWaveStartToMinutes(value: string): number | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  const ampm = raw.match(/^(\d{1,2}):(\d{2})\s*([aApP][mM])$/);
+  if (ampm) {
+    let hour = Number(ampm[1]);
+    const minute = Number(ampm[2]);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+    const meridiem = ampm[3].toUpperCase();
+
+    if (hour === 12) {
+      hour = meridiem === 'AM' ? 0 : 12;
+    } else if (meridiem === 'PM') {
+      hour += 12;
+    }
+
+    return hour * 60 + minute;
+  }
+
+  const hm = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (hm) {
+    const hour = Number(hm[1]);
+    const minute = Number(hm[2]);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+    return hour * 60 + minute;
+  }
+
+  return null;
+}
+
 export default function Page() {
   const [mounted, setMounted] = useState(clientHasMounted);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -36,7 +67,30 @@ export default function Page() {
     themeColors,
   } = useWaveStore();
 
-  const waveIds = Object.keys(waves);
+  const visibleWaveEntries = (() => {
+    const entries = Object.entries(waves);
+    const hasTimedWaves = entries.some(([, wave]) => parseWaveStartToMinutes(wave.startTime) !== null);
+
+    const filtered = hasTimedWaves
+      ? entries.filter(([, wave]) => {
+          const hasValidStart = parseWaveStartToMinutes(wave.startTime) !== null;
+          const hasParticipants = Array.isArray(wave.participants) && wave.participants.length > 0;
+          return hasValidStart || hasParticipants;
+        })
+      : entries;
+
+    return filtered.sort((a, b) => {
+      const minutesA = parseWaveStartToMinutes(a[1].startTime);
+      const minutesB = parseWaveStartToMinutes(b[1].startTime);
+
+      if (minutesA !== null && minutesB !== null) return minutesA - minutesB;
+      if (minutesA !== null) return -1;
+      if (minutesB !== null) return 1;
+
+      return a[1].name.localeCompare(b[1].name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  })();
+  const waveIds = visibleWaveEntries.map(([id]) => id);
 
   const waveIdFromTime = (label: string): string => {
     return `wave-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;

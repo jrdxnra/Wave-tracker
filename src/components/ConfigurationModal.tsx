@@ -6,7 +6,7 @@ import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { useWaveStore } from '@/store/waveStore';
 import PasscodeProtection from '@/components/PasscodeProtection';
 import { getFirebase } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 import { MovementUnit } from '@/types';
 
 function escapeCsvValue(value: string | number): string {
@@ -154,6 +154,12 @@ function buildWaveTimes(startTime: string, totalWaves: number, intervalMinutes: 
 
 function waveIdFromTime(label: string): string {
   return `wave-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+function normalizeWaveTimeLabel(value: string): string | null {
+  const minutes = parseTimeToMinutes(value);
+  if (minutes === null) return null;
+  return formatMinutesToLabel(minutes);
 }
 
 interface ConfigurationModalProps {
@@ -393,7 +399,11 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
     setIsCreatingWaves(true);
     try {
-      const saveEventId = selectedEventId === CREATE_NEW_EVENT_OPTION ? activeEventId : selectedEventId;
+      if (selectedEventId !== CREATE_NEW_EVENT_OPTION && selectedEventId !== activeEventId) {
+        throw new Error('Wait for event switching to finish before creating waves.');
+      }
+
+      const saveEventId = activeEventId;
       if (!saveEventId || saveEventId === CREATE_NEW_EVENT_OPTION) {
         throw new Error('Select a real event before creating waves.');
       }
@@ -411,6 +421,18 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
       const { db } = getFirebase();
       const now = new Date().toISOString();
+      const expectedNormalized = expectedWaveTimes
+        .map((time) => normalizeWaveTimeLabel(time))
+        .filter((time): time is string => Boolean(time));
+
+      const wavesCol = collection(db, 'events', saveEventId, 'waves');
+      const beforeSnap = await getDocs(wavesCol);
+      const beforeTimes = new Set(
+        beforeSnap.docs
+          .map((docSnap) => normalizeWaveTimeLabel(String(docSnap.data().startTime || '')))
+          .filter((time): time is string => Boolean(time))
+      );
+      const missingBefore = expectedNormalized.filter((time) => !beforeTimes.has(time));
 
       await Promise.all(
         expectedWaveTimes.map((time) =>
@@ -425,10 +447,45 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         )
       );
 
-      alert(missingWaveTimes.length > 0
-        ? `Created ${expectedWaveTimes.length} wave(s). ${missingWaveTimes.length} were newly added.`
-        : `All ${expectedWaveTimes.length} wave(s) already exist.`
+      // Remove legacy placeholder waves (e.g. "Wave 1") that have no start time and no participants.
+      const cleanupPromises = beforeSnap.docs.map(async (waveDoc) => {
+        const waveData = waveDoc.data() as { name?: string; startTime?: string };
+        const waveName = String(waveData.name || '').trim();
+        const normalizedStart = normalizeWaveTimeLabel(String(waveData.startTime || ''));
+        const looksLikeLegacyPlaceholder = /^wave\s+\d+$/i.test(waveName);
+
+        if (!looksLikeLegacyPlaceholder || normalizedStart) {
+          return;
+        }
+
+        const participantsSnap = await getDocs(collection(db, 'events', saveEventId, 'waves', waveDoc.id, 'participants'));
+        if (!participantsSnap.empty) {
+          return;
+        }
+
+        await deleteDoc(waveDoc.ref);
+      });
+      await Promise.all(cleanupPromises);
+
+      // Ensure local wave cards/dropdowns reflect newly created docs immediately.
+      await useWaveStore.getState().loadAll({ preserveActiveEvent: true, force: true });
+
+      const afterSnap = await getDocs(wavesCol);
+      const afterTimes = new Set(
+        afterSnap.docs
+          .map((docSnap) => normalizeWaveTimeLabel(String(docSnap.data().startTime || '')))
+          .filter((time): time is string => Boolean(time))
       );
+      const stillMissing = expectedNormalized.filter((time) => !afterTimes.has(time));
+      const createdCount = Math.max(0, missingBefore.length - stillMissing.length);
+
+      if (stillMissing.length > 0) {
+        alert(`Synced ${expectedWaveTimes.length} wave(s), but ${stillMissing.length} expected time(s) are still missing.`);
+      } else if (createdCount > 0) {
+        alert(`Created ${expectedWaveTimes.length} wave(s). ${createdCount} were newly added.`);
+      } else {
+        alert(`All ${expectedWaveTimes.length} wave(s) already exist.`);
+      }
     } catch (error) {
       console.error('❌ Failed to create waves:', error);
       alert(error instanceof Error ? error.message : 'Failed to create waves.');

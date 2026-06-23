@@ -35,6 +35,7 @@ interface EventSummary {
 const DEFAULT_EVENT_ID = 'g-rox';
 const DEFAULT_EVENT_NAME = 'G-ROX';
 const DEFAULT_MOVEMENT_UNIT: MovementUnit = 'reps';
+let loadAllRequestSeq = 0;
 
 function isMovementUnit(value: unknown): value is MovementUnit {
   return value === 'reps'
@@ -490,7 +491,7 @@ interface WaveStore {
   updateEventBranding: (updates: Partial<EventBranding>, eventId: string) => Promise<void>;
   loadEventsCatalog: (options?: { preserveActiveEvent?: boolean }) => Promise<void>;
   saveAll: () => Promise<void>;
-  loadAll: (options?: { preserveActiveEvent?: boolean }) => Promise<void>;
+  loadAll: (options?: { preserveActiveEvent?: boolean; force?: boolean }) => Promise<void>;
   loadGlobalConfig: () => Promise<void>;
   invalidateCache: () => void;
   clearCacheAndReload: () => Promise<void>;
@@ -1730,10 +1731,11 @@ export const useWaveStore = create<WaveStore>()(
 
       // Load data from Firebase on app startup (with caching)
       loadAll: async (options = {}) => {
+        const requestId = ++loadAllRequestSeq;
         const state = get();
         const FRESHNESS_TTL_MS = 30_000; // 30 seconds
         const age = state.lastFirebaseSync ? Date.now() - state.lastFirebaseSync : Infinity;
-        if (state.isDataLoaded && age < FRESHNESS_TTL_MS) {
+        if (!options.force && state.isDataLoaded && age < FRESHNESS_TTL_MS) {
           secureLogger.log(`⚡ loadAll skipped — data is fresh (${Math.round(age / 1000)}s old)`);
           return;
         }
@@ -1782,6 +1784,10 @@ export const useWaveStore = create<WaveStore>()(
           
           if (Object.keys(loaded).length > 0) {
             const firstId = Object.keys(loaded)[0];
+            if (requestId !== loadAllRequestSeq) {
+              secureLogger.log('⏭️ Skipping stale loadAll result (newer load exists)');
+              return;
+            }
             set({ 
               waves: loaded, 
               currentWaveId: firstId, 
@@ -1790,6 +1796,10 @@ export const useWaveStore = create<WaveStore>()(
             });
             secureLogger.log('✅ Set waves in store, current wave:', firstId);
           } else {
+            if (requestId !== loadAllRequestSeq) {
+              secureLogger.log('⏭️ Skipping stale loadAll empty result (newer load exists)');
+              return;
+            }
             set({ 
               waves: {},
               currentWaveId: null,
@@ -1800,6 +1810,10 @@ export const useWaveStore = create<WaveStore>()(
           }
         } catch (e) {
           console.error('Error loading waves:', e);
+          if (requestId !== loadAllRequestSeq) {
+            secureLogger.log('⏭️ Skipping stale loadAll error result (newer load exists)');
+            return;
+          }
           set({ 
             isDataLoaded: true,
             lastFirebaseSync: Date.now()

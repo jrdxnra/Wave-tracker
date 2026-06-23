@@ -473,6 +473,7 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
   }, [sheetRows, search, statusFilter, swimFilter, firstTriFilter, entryModeFilter]);
 
   const availableWaveTimes = useMemo(() => {
+    const hasPersistedWaves = Object.keys(wavesById).length > 0;
     const fromWaveDocs = Object.values(wavesById)
       .map((wave) => String(wave.startTime || '').trim())
       .map((time) => {
@@ -481,7 +482,14 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
       })
       .filter((time): time is string => Boolean(time));
 
-    const sourceTimes = fromWaveDocs.length > 0 ? fromWaveDocs : configuredWaveTimes;
+    const persistedSubsetOfConfigured =
+      fromWaveDocs.length > 0 && fromWaveDocs.every((time) => configuredWaveTimes.includes(time));
+
+    const sourceTimes = hasPersistedWaves
+      ? (persistedSubsetOfConfigured && configuredWaveTimes.length > fromWaveDocs.length
+        ? [...fromWaveDocs, ...configuredWaveTimes]
+        : fromWaveDocs)
+      : configuredWaveTimes;
     return Array.from(new Set(sourceTimes)).sort((a, b) => {
       const minutesA = parseClockToMinutes(a);
       const minutesB = parseClockToMinutes(b);
