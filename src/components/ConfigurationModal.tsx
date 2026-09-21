@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { useWaveStore } from '@/store/waveStore';
+import type { LiftFlight } from '@/store/waveStore';
 import PasscodeProtection from '@/components/PasscodeProtection';
 import { getFirebase } from '@/lib/firebase';
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
@@ -176,6 +177,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     customEvents, movementUnits, updateWaveEvents, setMovementUnits, intervalMinutes, workMinutes, restMinutes, maxParticipants, waves: existingWaves,
     workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode,
     movementTimingMode, movementIntervals,
+    liftFlights, olympicLiftsEnabled, setLiftEventConfig,
     setTimingConfig, setMaxParticipants, setWorkoutTimerConfig, setEventConfig, setAccessPasscode,
     loadGlobalConfig, eventBranding, eventClockEnabled, setEventClockEnabled, themeColors,
     eventsCatalog, activeEventId, loadEventsCatalog, createEvent, deleteEvent, setActiveEvent, updateEventBranding,
@@ -193,8 +195,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [interval, setInterval] = useState<number>(intervalMinutes);
   const [work, setWork] = useState<EditableMinutes>(workMinutes);
   const [rest, setRest] = useState<EditableMinutes>(restMinutes);
-  const [movementTimingModeLocal, setMovementTimingModeLocal] = useState<'global' | 'individual'>(movementTimingMode);
+  const [movementTimingModeLocal, setMovementTimingModeLocal] = useState<'global' | 'individual' | 'lift'>(movementTimingMode);
   const [movementIntervalsLocal, setMovementIntervalsLocal] = useState<EditableMovementIntervals>(movementIntervals);
+  const [liftFlightsLocal, setLiftFlightsLocal] = useState<Record<string, LiftFlight[]>>(liftFlights);
+  const [olympicLiftsEnabledLocal, setOlympicLiftsEnabledLocal] = useState<boolean>(olympicLiftsEnabled);
   const [maxParticipantsLocal, setMaxParticipantsLocal] = useState<number>(normalizeMaxParticipants(maxParticipants));
   const [timerWorkSeconds, setTimerWorkSeconds] = useState<number>(workoutTimerWorkSeconds);
   const [timerRestSeconds, setTimerRestSeconds] = useState<number>(workoutTimerRestSeconds);
@@ -209,7 +213,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [pinnedSheetUrl, setPinnedSheetUrl] = useState('');
 
   const [newEventName, setNewEventName] = useState('');
-  const [newEventMovementTimingMode, setNewEventMovementTimingMode] = useState<'global' | 'individual'>('global');
+  const [newEventMovementTimingMode, setNewEventMovementTimingMode] = useState<'global' | 'individual' | 'lift'>('global');
   const [brandTitle, setBrandTitle] = useState<string>(eventBranding.title);
   const [brandEmojiLeft, setBrandEmojiLeft] = useState<string>(eventBranding.emojiLeft);
   const [brandEmojiRight, setBrandEmojiRight] = useState<string>(eventBranding.emojiRight);
@@ -284,6 +288,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setRest(restMinutes);
     setMovementTimingModeLocal(movementTimingMode);
     setMovementIntervalsLocal(movementIntervals);
+    setLiftFlightsLocal(liftFlights);
+    setOlympicLiftsEnabledLocal(olympicLiftsEnabled);
     setMaxParticipantsLocal(normalizeMaxParticipants(maxParticipants));
     setTimerWorkSeconds(workoutTimerWorkSeconds);
     setTimerRestSeconds(workoutTimerRestSeconds);
@@ -294,7 +300,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setPasscodeProtectionEnabledLocal(passcodeProtectionEnabled);
     setDefaultStartEventIdLocal(defaultStartEventId);
     setFeedbackEnabledLocal(feedbackEnabled);
-  }, [customEvents, movementUnits, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode, passcodeProtectionEnabled, defaultStartEventId, feedbackEnabled]);
+  }, [customEvents, movementUnits, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, liftFlights, olympicLiftsEnabled, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode, passcodeProtectionEnabled, defaultStartEventId, feedbackEnabled]);
 
   useEffect(() => {
     setMovementIntervalsLocal((prev) => {
@@ -528,6 +534,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
             createdEventId
           );
 
+          if (newEventMovementTimingMode === 'lift') {
+            await setLiftEventConfig(liftFlightsLocal, olympicLiftsEnabledLocal, createdEventId);
+          }
+
           await setMovementUnits(movementUnitsLocal, createdEventId);
 
           await updateEventBranding({
@@ -589,6 +599,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         normalizeMovementIntervals(movementIntervalsLocal, work, rest),
         saveEventId
       );
+      if (movementTimingModeLocal === 'lift') {
+        await setLiftEventConfig(liftFlightsLocal, olympicLiftsEnabledLocal, saveEventId);
+      }
       await setMaxParticipants(maxParticipantsLocal, saveEventId);
       await setWorkoutTimerConfig(Math.max(1, Math.round(timerWorkSeconds)), Math.max(1, Math.round(timerRestSeconds)), saveEventId);
       await setEventConfig(startDate, startTime, Math.max(1, Math.round(waves)), saveEventId);
@@ -686,6 +699,36 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       [newEvents[index], newEvents[index + 1]] = [newEvents[index + 1], newEvents[index]];
       setEvents(newEvents);
     }
+  };
+
+  const handleAddFlight = (movementName: string) => {
+    setLiftFlightsLocal((prev) => {
+      const existing = prev[movementName] || [];
+      const nextLetter = String.fromCharCode(65 + existing.length);
+      const newFlight: LiftFlight = {
+        id: `${movementName}-flight-${Date.now()}`,
+        label: `Flight ${nextLetter}`,
+        startTime: '',
+        endTime: '',
+      };
+      return { ...prev, [movementName]: [...existing, newFlight] };
+    });
+  };
+
+  const handleRemoveFlight = (movementName: string, flightId: string) => {
+    setLiftFlightsLocal((prev) => ({
+      ...prev,
+      [movementName]: (prev[movementName] || []).filter((flight) => flight.id !== flightId),
+    }));
+  };
+
+  const handleUpdateFlight = (movementName: string, flightId: string, field: keyof LiftFlight, value: string) => {
+    setLiftFlightsLocal((prev) => ({
+      ...prev,
+      [movementName]: (prev[movementName] || []).map((flight) =>
+        flight.id === flightId ? { ...flight, [field]: value } : flight
+      ),
+    }));
   };
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -1502,6 +1545,94 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           </div>
         </div>
 
+        {movementTimingModeLocal === 'lift' && (
+          <div className="mb-6">
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900">Enable Olympic Lifts</h4>
+                <p className="text-xs text-gray-600">Turn on if this event offers Snatch / Clean &amp; Jerk style lifts in addition to the main lifts.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOlympicLiftsEnabledLocal((prev) => !prev)}
+                className="min-w-[100px] rounded-md px-3 py-2 text-sm font-semibold text-white transition-colors"
+                style={{ backgroundColor: olympicLiftsEnabledLocal ? themeColors.accent : '#6b7280' }}
+              >
+                {olympicLiftsEnabledLocal ? 'Enabled' : 'Disabled'}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-lg font-medium text-gray-900">Flight Schedule</h3>
+              {renderInfoTip(
+                'Add one or more flights per lift (e.g., Flight A, B, C, D), each with its own start and end time. Flight capacity uses the Max Participants setting above.',
+                'Flight Schedule tips'
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {events.map((movementName) => {
+                const flights = liftFlightsLocal[movementName] || [];
+                return (
+                  <div key={movementName} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-gray-900">{movementName}</h4>
+                      <button
+                        type="button"
+                        onClick={() => handleAddFlight(movementName)}
+                        className="rounded-md px-3 py-1 text-xs font-semibold text-white"
+                        style={{ backgroundColor: themeColors.accent }}
+                      >
+                        + Add Flight
+                      </button>
+                    </div>
+                    {flights.length === 0 ? (
+                      <p className="text-xs text-gray-500">No flights yet. Add one above.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {flights.map((flight) => (
+                          <div key={flight.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-2 items-center">
+                            <input
+                              type="text"
+                              value={flight.label}
+                              onChange={(e) => handleUpdateFlight(movementName, flight.id, 'label', e.target.value)}
+                              placeholder="Flight label (e.g., Flight A)"
+                              className="w-full h-9 px-2 border border-gray-300 rounded-md bg-white text-sm input-focus-brand"
+                              aria-label={`Flight label for ${movementName}`}
+                            />
+                            <input
+                              type="time"
+                              value={flight.startTime}
+                              onChange={(e) => handleUpdateFlight(movementName, flight.id, 'startTime', e.target.value)}
+                              className="h-9 px-2 border border-gray-300 rounded-md bg-white text-sm input-focus-brand"
+                              aria-label={`Flight start time for ${movementName}`}
+                            />
+                            <input
+                              type="time"
+                              value={flight.endTime}
+                              onChange={(e) => handleUpdateFlight(movementName, flight.id, 'endTime', e.target.value)}
+                              className="h-9 px-2 border border-gray-300 rounded-md bg-white text-sm input-focus-brand"
+                              aria-label={`Flight end time for ${movementName}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFlight(movementName, flight.id)}
+                              className="shrink-0 p-1 text-red-500 hover:text-red-700"
+                              title="Remove flight"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
       </>
     );
   } else if (isCreatingNewEvent) {
@@ -1529,15 +1660,16 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Interval Mode *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Event Template *</label>
               <select
                 value={newEventMovementTimingMode}
-                onChange={(e) => setNewEventMovementTimingMode(e.target.value as 'global' | 'individual')}
+                onChange={(e) => setNewEventMovementTimingMode(e.target.value as 'global' | 'individual' | 'lift')}
                 className="w-full p-2 border border-gray-300 rounded-md input-focus-brand bg-white"
                 required
               >
-                <option value="global">Global Interval</option>
-                <option value="individual">Individual Intervals</option>
+                <option value="global">Workout Event</option>
+                <option value="individual">Triathlon Event</option>
+                <option value="lift">Lift Event</option>
               </select>
             </div>
           </div>

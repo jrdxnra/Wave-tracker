@@ -374,8 +374,12 @@ interface FirebaseConfigData {
     intervalMinutes?: number;
     workMinutes?: number;
     restMinutes?: number;
-    movementMode?: 'global' | 'individual';
+    movementMode?: 'global' | 'individual' | 'lift';
     movementIntervals?: Record<string, { workMinutes?: number; restMinutes?: number }>;
+  };
+  liftEvent?: {
+    olympicLiftsEnabled?: boolean;
+    flights?: Record<string, LiftFlight[]>;
   };
   eventNotes?: string;
   maxParticipants?: number;
@@ -408,8 +412,15 @@ interface FirebaseWaveData {
   coach?: string;
 }
 
-type MovementTimingMode = 'global' | 'individual';
+type MovementTimingMode = 'global' | 'individual' | 'lift';
 type MovementIntervals = Record<string, { workMinutes: number; restMinutes: number }>;
+export interface LiftFlight {
+  id: string;
+  label: string;
+  startTime: string; // "HH:mm" 24-hour
+  endTime: string; // "HH:mm" 24-hour
+}
+type LiftFlightsByMovement = Record<string, LiftFlight[]>;
 
 interface WaveStore {
   activeEventId: string;
@@ -427,6 +438,8 @@ interface WaveStore {
   restMinutes: number;
   movementTimingMode: MovementTimingMode;
   movementIntervals: MovementIntervals;
+  liftFlights: LiftFlightsByMovement; // Lift Event only: flights (letter + time block) per lift movement
+  olympicLiftsEnabled: boolean; // Lift Event only: whether Snatch/Clean & Jerk style movements are offered
   maxParticipants: number;
   workoutTimerWorkSeconds: number;
   workoutTimerRestSeconds: number;
@@ -475,6 +488,7 @@ interface WaveStore {
     movementIntervals: MovementIntervals,
     eventId: string
   ) => Promise<void>;
+  setLiftEventConfig: (liftFlights: LiftFlightsByMovement, olympicLiftsEnabled: boolean, eventId: string) => Promise<void>;
   setMaxParticipants: (maxParticipants: number, eventId: string) => Promise<void>;
   setWorkoutTimerConfig: (workSeconds: number, restSeconds: number, eventId: string) => Promise<void>;
   setEventConfig: (startDate: string, startTime: string, totalWaves: number, eventId: string) => Promise<void>;
@@ -561,6 +575,8 @@ export const useWaveStore = create<WaveStore>()(
       restMinutes: 2,
       movementTimingMode: 'global',
       movementIntervals: {},
+      liftFlights: {},
+      olympicLiftsEnabled: false,
       maxParticipants: 10,
       workoutTimerWorkSeconds: 60,
       workoutTimerRestSeconds: 30,
@@ -923,6 +939,28 @@ export const useWaveStore = create<WaveStore>()(
           }, { merge: true });
         } catch (error) {
           console.error('❌ Failed to save timing config to Firebase:', error);
+        }
+      },
+
+      setLiftEventConfig: async (liftFlights, olympicLiftsEnabled, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        if (targetEventId === state.activeEventId) {
+          set({ liftFlights, olympicLiftsEnabled });
+        }
+
+        try {
+          const { db } = getFirebase();
+          const configRef = getEventConfigRef(db, targetEventId);
+          await setDoc(configRef, {
+            liftEvent: {
+              olympicLiftsEnabled,
+              flights: liftFlights,
+            },
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } catch (error) {
+          console.error('❌ Failed to save lift event config to Firebase:', error);
         }
       },
       
@@ -1609,9 +1647,29 @@ export const useWaveStore = create<WaveStore>()(
                 intervalMinutes: Number(intervalMinutes) || 5,
                 workMinutes: Number(workMinutes) || 3,
                 restMinutes: Number(restMinutes) || 2,
-                movementTimingMode: movementMode === 'individual' ? 'individual' : 'global',
+                movementTimingMode: movementMode === 'individual' ? 'individual' : movementMode === 'lift' ? 'lift' : 'global',
                 movementIntervals: normalizedIntervals,
               });
+            }
+            if (data.liftEvent) {
+              const rawFlights = data.liftEvent.flights || {};
+              const normalizedFlights = Object.fromEntries(
+                Object.entries(rawFlights).map(([movementName, flights]) => [
+                  movementName,
+                  (Array.isArray(flights) ? flights : []).map((flight) => ({
+                    id: String(flight?.id || ''),
+                    label: String(flight?.label || ''),
+                    startTime: String(flight?.startTime || ''),
+                    endTime: String(flight?.endTime || ''),
+                  })),
+                ])
+              ) as LiftFlightsByMovement;
+              set({
+                liftFlights: normalizedFlights,
+                olympicLiftsEnabled: Boolean(data.liftEvent.olympicLiftsEnabled),
+              });
+            } else {
+              set({ liftFlights: {}, olympicLiftsEnabled: false });
             }
             if (typeof data.eventNotes === 'string') {
               set({ eventNotes: data.eventNotes });

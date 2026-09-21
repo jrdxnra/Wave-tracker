@@ -71,9 +71,9 @@ Status key: ✅ Decided/Done · 🟡 In progress · ❓ Open question · ⛔ Def
 
 ## Task checklist (unchecked = not started)
 
-- [ ] Add `Lift Event` as a third template option in Configuration Modal (with `Workout Event` / `Triathlon Event` relabeled).
-- [ ] Extend `MovementTimingMode`/template type + store (`src/store/waveStore.ts`) to support the new mode.
-- [ ] Settings UI: coach-configurable lift list, per-lift flight count, per-flight start/end time, Oly-lifts-enabled toggle.
+- [x] Add `Lift Event` as a third template option in Configuration Modal (with `Workout Event` / `Triathlon Event` relabeled).
+- [x] Extend `MovementTimingMode`/template type + store (`src/store/waveStore.ts`) to support the new mode.
+- [x] Settings UI: coach-configurable lift list (reuses existing movements list), per-lift flight count + per-flight start/end time editor, Oly-lifts-enabled toggle. Persisted via new `setLiftEventConfig` store action → `events/{id}/config/global.liftEvent`.
 - [ ] Registration: per-lift flight preference fields, Division field, optional opener weight, rack height.
 - [ ] Waves/Flight tab: "Wave" → "Flight" label swap for this template; check-in fields (bodyweight, attempt weight, rack height); 2-per-row card grid.
 - [ ] Performance page: rack-based view, Opener/2nd/3rd attempt inputs with Hit/Miss, editable after the fact.
