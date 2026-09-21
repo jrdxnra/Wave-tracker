@@ -25,3 +25,8 @@
 - Prefer the standardized-question approach for reliability, with field mapping only if event requirements diverge.
 - Include a setup UI/checklist in the app for copying the script, pasting it into Apps Script, and running trigger installation.
 - Consider piloting this flow on G-ROX later if that event needs a registration form integration.
+
+### New "Lift Event" template
+
+This graduated from an idea to an active in-progress build. Full plan, decisions, and task checklist now live in [LIFT_EVENT_PLAN.md](LIFT_EVENT_PLAN.md) (with [LIFT_EVENT_TROUBLESHOOTING.md](LIFT_EVENT_TROUBLESHOOTING.md) tracking issues as we build it) — see those files instead of this entry going forward.
+
