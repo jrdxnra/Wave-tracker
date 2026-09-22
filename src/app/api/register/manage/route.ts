@@ -308,6 +308,18 @@ async function getEventWaveConfig(db: Firestore, eventId: string): Promise<{ wav
     return { waveCapacityLimit, waveTimes: persistedWaveTimes };
   }
 
+  if (data?.timing?.movementMode === 'lift') {
+    const flightsByMovement = (data?.liftEvent?.flights || {}) as Record<string, unknown>;
+    const liftTimes = Object.values(flightsByMovement)
+      .flatMap((flights) => Array.isArray(flights) ? flights : [])
+      .map((flight) => normalizeWaveTime((flight as Record<string, unknown>).startTime as string | undefined) || '')
+      .filter(Boolean);
+
+    if (liftTimes.length > 0) {
+      return { waveCapacityLimit, waveTimes: sortUniqueWaveTimes(liftTimes) };
+    }
+  }
+
   const startTime = String(data?.event?.startTime || '').trim();
   const totalWavesRaw = Number(data?.event?.totalWaves);
   const intervalRaw = Number(data?.event?.waveStartIntervalMinutes ?? data?.timing?.intervalMinutes);
@@ -385,6 +397,8 @@ async function assignParticipantToWave(args: {
     waveData: {},
     includeInLeaderboard: args.regData.includeInLeaderboard !== false,
     pingGroupOptIn: !!args.regData.pingGroupOptIn,
+    olympicLiftsOptIn: !!args.regData.olympicLiftsOptIn,
+    bodyWeight: String(args.regData.bodyWeight || ''),
     swimComfort: String(args.regData.swimComfort || ''),
     isFirstTri: !!args.regData.isFirstTri,
     registrationStatus: 'Confirmed',

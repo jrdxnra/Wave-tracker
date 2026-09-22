@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lift Event — Performance Page Mockup</title>
+    <style>
+      :root {
+        --bg: #f3f6fb;
+        --panel: #ffffff;
+        --header: #10233d;
+        --border: #dfe7f4;
+        --text: #17273d;
+        --muted: #66758f;
+        --accent: #2d6cdf;
+        --accent-soft: #eaf1ff;
+        --green: #1d9d6d;
+        --green-soft: #dff7ee;
+        --amber: #d48b1a;
+        --amber-soft: #fff3d9;
+        --red: #db4f4f;
+        --red-soft: #fde9e9;
+        --shadow: 0 12px 28px rgba(16, 35, 61, 0.08);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: Inter, "Segoe UI", sans-serif;
+        background: linear-gradient(180deg, #edf3ff 0%, var(--bg) 30%, #eef3fd 100%);
+        color: var(--text);
+      }
+
+      .wrap {
+        max-width: 1460px;
+        margin: 32px auto;
+        padding: 0 22px 40px;
+      }
+
+      .hero {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      .hero h1 {
+        font-size: 30px;
+        margin: 0;
+        color: var(--header);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        border: 1px solid #cfe0ff;
+        color: var(--accent);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+        margin-bottom: 20px;
+      }
+
+      .panel-head {
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--border);
+        background: #f8faff;
+        border-radius: 18px 18px 0 0;
+      }
+
+      .panel-body {
+        padding: 18px;
+      }
+
+      .eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 800;
+      }
+
+      .panel-head h2 {
+        margin: 4px 0 0;
+        font-size: 20px;
+        color: var(--header);
+      }
+
+      .step-divider {
+        border-top: 1px solid var(--border);
+        margin: 16px 0;
+      }
+
+      /* --- Tab rows (category / movement / flight) --- */
+      .tab-row {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .tab-btn {
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+        border: 1px solid var(--border);
+        background: #f4f7fd;
+        color: var(--muted);
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .tab-btn.active {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+      }
+
+      .tab-btn .tag {
+        margin-left: 6px;
+        font-size: 9px;
+        font-weight: 800;
+        padding: 2px 5px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.25);
+      }
+
+      .tab-btn:not(.active) .tag {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      /* --- Notes --- */
+      .note-banner {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        background: #eef5ff;
+        border: 1px solid #cfe0ff;
+        color: #1c4c9e;
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: 13px;
+        line-height: 1.5;
+        margin-bottom: 16px;
+      }
+
+      .note-banner strong { color: var(--header); }
+
+      /* --- Rack lanes --- */
+      .lane-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+
+      .lane {
+        background: #f8fbff;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 14px;
+      }
+
+      .lane-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      .lane-head h3 {
+        margin: 0;
+        font-size: 17px;
+        color: var(--header);
+      }
+
+      .device-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--green);
+        background: var(--green-soft);
+        border: 1px solid #cfeee0;
+        padding: 4px 8px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+
+      .lifter-card {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+      }
+
+      .lifter-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .lifter-name {
+        font-weight: 800;
+        color: var(--header);
+        font-size: 14px;
+      }
+
+      .lifter-card .assign-select {
+        min-width: 92px;
+        height: 28px;
+      }
+
+      .attempt-mini-row {
+        display: flex;
+        gap: 6px;
+      }
+
+      .attempt-mini {
+        flex: 1;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px;
+        text-align: center;
+      }
+
+      .attempt-mini .label {
+        display: block;
+        font-size: 9px;
+        font-weight: 800;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-bottom: 3px;
+      }
+
+      .attempt-mini input {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        height: 26px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+
+      .attempt-toggle-row {
+        display: flex;
+        gap: 3px;
+      }
+
+      .attempt-toggle {
+        flex: 1;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #f2f5fa;
+        color: var(--muted);
+        font-size: 9px;
+        font-weight: 800;
+        height: 20px;
+      }
+
+      .attempt-toggle.good { background: var(--green-soft); color: var(--green); border-color: #cfeee0; }
+      .attempt-toggle.miss { background: var(--red-soft); color: var(--red); border-color: #f7caca; }
+
+      /* --- Ordered (no-rack) list --- */
+      .ordered-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .ordered-row {
+        display: grid;
+        grid-template-columns: 32px 1fr auto;
+        align-items: center;
+        gap: 12px;
+        background: #f8fbff;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 14px;
+      }
+
+      .order-num {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--header);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 13px;
+      }
+
+      .order-name {
+        font-weight: 800;
+        color: var(--header);
+        font-size: 14px;
+      }
+
+      .order-meta {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      /* --- Rack assignment row --- */
+      .assign-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 18px;
+      }
+
+      .assign-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: #f8fbff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 12px;
+      }
+
+      .assign-name {
+        font-weight: 800;
+        color: var(--header);
+        font-size: 13px;
+      }
+
+      .assign-select {
+        height: 32px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #fff;
+        padding: 0 8px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--header);
+        min-width: 120px;
+      }
+
+      @media (max-width: 760px) {
+        .lane-grid { grid-template-columns: 1fr; }
+      }
+
+      /* --- Compact horizontal step rows --- */
+      .step-row {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 10px 0;
+      }
+
+      .step-row + .step-row {
+        border-top: 1px solid var(--border);
+      }
+
+      .step-label {
+        flex-shrink: 0;
+        min-width: 88px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .step-row .tab-row {
+        margin-top: 0;
+        flex: 1;
+      }
+
+      .top-row {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 20px;
+      }
+
+      .top-row .step-col {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 200px;
+      }
+
+      .top-row .step-col + .step-col {
+        border-left: 1px solid var(--border);
+        padding-left: 20px;
+      }
+
+      .rack-row {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="hero">
+        <h1>Performance Page — Movement → Flight → Rack</h1>
+        <span class="pill">Scoped assignment, not a 200-person list</span>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="top-row">
+            <div class="step-col">
+              <span class="step-label">Category</span>
+              <div class="tab-row" id="categoryTabs"></div>
+            </div>
+            <div class="step-col">
+              <span class="step-label">Movement</span>
+              <div class="tab-row" id="movementTabs"></div>
+            </div>
+            <div class="step-col">
+              <span class="step-label">Flight</span>
+              <div class="tab-row" id="flightTabs"></div>
+            </div>
+            <div class="step-col rack-row" id="rackRow" hidden>
+              <span class="step-label">Rack</span>
+              <div class="tab-row" id="rackTabs"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-body">
+          <div class="note-banner" id="modeNote"></div>
+          <div id="rosterContainer"></div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      // ---- Mock data model: Category -> Movement -> Flight -> roster ----
+      const DATA = {
+        Powerlifting: {
+          Squat: {
+            usesRack: true,
+            flights: {
+              'Flight A': [
+                { name: 'Avery Johnson', rack: null, attempts: [{ w: 225, s: 'good' }, { w: 245, s: 'pending' }, { w: 255, s: 'pending' }] },
+                { name: 'Sofia Lee', rack: null, attempts: [{ w: 185, s: 'good' }, { w: 205, s: 'miss' }, { w: 205, s: 'pending' }] },
+                { name: 'Priya Nair', rack: null, attempts: [{ w: 195, s: 'good' }, { w: 215, s: 'pending' }, { w: 225, s: 'pending' }] },
+              ],
+              'Flight B': [
+                { name: 'Maya Ruiz', rack: null, attempts: [{ w: 155, s: 'pending' }, { w: 175, s: 'pending' }, { w: 190, s: 'pending' }] },
+                { name: 'Tyler Kim', rack: null, attempts: [{ w: 275, s: 'good' }, { w: 295, s: 'pending' }, { w: 315, s: 'pending' }] },
+              ],
+            },
+          },
+          Bench: {
+            usesRack: true,
+            flights: {
+              'Flight A': [
+                { name: 'Avery Johnson', rack: null, attempts: [{ w: 155, s: 'pending' }, { w: 175, s: 'pending' }, { w: 185, s: 'pending' }] },
+                { name: 'Darius Moore', rack: null, attempts: [{ w: 225, s: 'good' }, { w: 245, s: 'good' }, { w: 265, s: 'pending' }] },
+              ],
+              'Flight B': [
+                { name: 'Maya Ruiz', rack: null, attempts: [{ w: 95, s: 'pending' }, { w: 105, s: 'pending' }, { w: 115, s: 'pending' }] },
+              ],
+            },
+          },
+          Deadlift: {
+            usesRack: false,
+            flights: {
+              'Flight A': [
+                { name: 'Sofia Lee', attempts: [{ w: 245, s: 'pending' }, { w: 265, s: 'pending' }, { w: 285, s: 'pending' }] },
+                { name: 'Darius Moore', attempts: [{ w: 405, s: 'good' }, { w: 425, s: 'pending' }, { w: 445, s: 'pending' }] },
+                { name: 'Avery Johnson', attempts: [{ w: 315, s: 'pending' }, { w: 335, s: 'pending' }, { w: 355, s: 'pending' }] },
+              ],
+            },
+          },
+        },
+        Olympic: {
+          Snatch: {
+            usesRack: false,
+            platform: true,
+            flights: {
+              'Flight A': [
+                { name: 'Tyler Kim', platform: null, attempts: [{ w: 95, s: 'good' }, { w: 105, s: 'pending' }, { w: 115, s: 'pending' }] },
+                { name: 'Priya Nair', platform: null, attempts: [{ w: 65, s: 'pending' }, { w: 70, s: 'pending' }, { w: 75, s: 'pending' }] },
+              ],
+            },
+          },
+          'Clean & Jerk': {
+            usesRack: false,
+            platform: true,
+            flights: {
+              'Flight A': [
+                { name: 'Tyler Kim', platform: null, attempts: [{ w: 120, s: 'pending' }, { w: 130, s: 'pending' }, { w: 140, s: 'pending' }] },
+              ],
+            },
+          },
+        },
+      };
+
+      let state = { category: 'Powerlifting', movement: 'Squat', flight: 'Flight A', rackKey: null };
+
+      const categoryTabs = document.getElementById('categoryTabs');
+      const movementTabs = document.getElementById('movementTabs');
+      const flightTabs = document.getElementById('flightTabs');
+      const rackRow = document.getElementById('rackRow');
+      const rackTabs = document.getElementById('rackTabs');
+      const modeNote = document.getElementById('modeNote');
+      const rosterContainer = document.getElementById('rosterContainer');
+
+      function firstRackKey() {
+        const movement = DATA[state.category][state.movement];
+        if (movement.usesRack) return 'Rack 1';
+        if (movement.platform) return 'Platform A';
+        return null;
+      }
+
+      function renderCategoryTabs() {
+        categoryTabs.innerHTML = '';
+        Object.keys(DATA).forEach((cat) => {
+          const btn = document.createElement('button');
+          btn.className = 'tab-btn' + (cat === state.category ? ' active' : '');
+          btn.textContent = cat;
+          btn.addEventListener('click', () => {
+            state.category = cat;
+            const movements = Object.keys(DATA[cat]);
+            state.movement = movements[0];
+            state.flight = Object.keys(DATA[cat][state.movement].flights)[0];
+            state.rackKey = firstRackKey();
+            renderAll();
+          });
+          categoryTabs.appendChild(btn);
+        });
+      }
+
+      function renderMovementTabs() {
+        movementTabs.innerHTML = '';
+        Object.entries(DATA[state.category]).forEach(([name, movement]) => {
+          const btn = document.createElement('button');
+          btn.className = 'tab-btn' + (name === state.movement ? ' active' : '');
+          btn.innerHTML = `${name}<span class="tag">${movement.usesRack ? 'RACK' : movement.platform ? 'PLATFORM' : 'FLOOR'}</span>`;
+          btn.addEventListener('click', () => {
+            state.movement = name;
+            state.flight = Object.keys(DATA[state.category][name].flights)[0];
+            state.rackKey = firstRackKey();
+            renderAll();
+          });
+          movementTabs.appendChild(btn);
+        });
+      }
+
+      function renderFlightTabs() {
+        flightTabs.innerHTML = '';
+        const movement = DATA[state.category][state.movement];
+        Object.keys(movement.flights).forEach((flightName) => {
+          const btn = document.createElement('button');
+          btn.className = 'tab-btn' + (flightName === state.flight ? ' active' : '');
+          btn.textContent = flightName;
+          btn.addEventListener('click', () => {
+            state.flight = flightName;
+            state.rackKey = firstRackKey();
+            renderAll();
+          });
+          flightTabs.appendChild(btn);
+        });
+      }
+
+      function renderRackTabs() {
+        const movement = DATA[state.category][state.movement];
+
+        if (!movement.usesRack && !movement.platform) {
+          rackRow.hidden = true;
+          rackTabs.innerHTML = '';
+          return;
+        }
+
+        rackRow.hidden = false;
+        rackTabs.innerHTML = '';
+        const keys = movement.usesRack
+          ? ['Rack 1', 'Rack 2', 'Rack 3', 'Rack 4']
+          : ['Platform A', 'Platform B'];
+
+        if (!state.rackKey || !keys.includes(state.rackKey)) {
+          state.rackKey = keys[0] || null;
+        }
+
+        keys.forEach((key) => {
+          const btn = document.createElement('button');
+          btn.className = 'tab-btn' + (key === state.rackKey ? ' active' : '');
+          btn.textContent = key;
+          btn.addEventListener('click', () => {
+            state.rackKey = key;
+            renderRoster();
+            renderRackTabs();
+          });
+          rackTabs.appendChild(btn);
+        });
+      }
+
+      function renderRoster() {
+        const movement = DATA[state.category][state.movement];
+        const roster = movement.flights[state.flight] || [];
+
+        if (movement.usesRack) {
+          const rackNum = state.rackKey ? Number(state.rackKey.replace('Rack ', '')) : null;
+          const lifters = roster.filter((lifter) => lifter.rack === rackNum);
+          modeNote.innerHTML = `<span>🔒</span><span><strong>${state.rackKey || 'This rack'} only.</strong> Scoped to ${state.movement} · ${state.flight}. This device only sees and saves attempts for lifters on ${state.rackKey || 'this rack'} — other racks are separate tabs/devices.</span>`;
+          rosterContainer.innerHTML = '';
+          rosterContainer.appendChild(buildCheckInList(roster, { kind: 'rack', options: [1, 2, 3, 4] }));
+
+          const rackLabel = document.createElement('div');
+          rackLabel.className = 'step-label';
+          rackLabel.style.margin = '18px 0 8px';
+          rackLabel.textContent = `${state.rackKey || 'Rack'} — live view`;
+          rosterContainer.appendChild(rackLabel);
+
+          const rackGrid = document.createElement('div');
+          rackGrid.className = 'lane-grid';
+          lifters.forEach((lifter) => {
+            rackGrid.appendChild(buildLifterCard(lifter, { kind: 'rack', options: [1, 2, 3, 4] }));
+          });
+          rosterContainer.appendChild(rackGrid);
+        } else if (movement.platform) {
+          const lifters = roster.filter((lifter) => lifter.platform === state.rackKey);
+          modeNote.innerHTML = `<span>🥇</span><span><strong>${state.rackKey || 'This platform'} only.</strong> Only opted-in lifters appear here, scoped to ${state.movement} · ${state.flight}.</span>`;
+          rosterContainer.innerHTML = '';
+          rosterContainer.appendChild(buildCheckInList(roster, { kind: 'platform', options: ['Platform A', 'Platform B'] }));
+
+          const platformLabel = document.createElement('div');
+          platformLabel.className = 'step-label';
+          platformLabel.style.margin = '18px 0 8px';
+          platformLabel.textContent = `${state.rackKey || 'Platform'} — live view`;
+          rosterContainer.appendChild(platformLabel);
+
+          const platformGrid = document.createElement('div');
+          platformGrid.className = 'lane-grid';
+          lifters.forEach((lifter) => {
+            platformGrid.appendChild(buildLifterCard(lifter, { kind: 'platform', options: ['Platform A', 'Platform B'] }));
+          });
+          rosterContainer.appendChild(platformGrid);
+        } else {
+          modeNote.innerHTML = `<span>🧾</span><span><strong>Floor movement — no rack needed.</strong> ${state.movement} doesn't require a rack, so lifters for ${state.flight} are shown as one open list — anyone can add attempt data as it happens.</span>`;
+          rosterContainer.innerHTML = '';
+          const list = document.createElement('div');
+          list.className = 'ordered-list';
+          roster.forEach((lifter, idx) => {
+            const row = document.createElement('div');
+            row.className = 'ordered-row';
+            row.innerHTML = `
+              <div class="order-num">${idx + 1}</div>
+              <div>
+                <div class="order-name">${lifter.name}</div>
+                <div class="order-meta">${lifter.attempts.map((a) => a.w).join(' / ')} lb</div>
+              </div>
+              <div style="font-size:12px; font-weight:800; color: var(--muted);">
+                ${lifter.attempts.map((a) => a.s === 'good' ? '✅' : a.s === 'miss' ? '❌' : '—').join(' ')}
+              </div>
+            `;
+            list.appendChild(row);
+          });
+          rosterContainer.appendChild(list);
+        }
+      }
+
+      function buildCheckInList(roster, assign) {
+        const wrapper = document.createElement('div');
+        const unassigned = roster.filter((lifter) => !(assign.kind === 'rack' ? lifter.rack : lifter.platform));
+
+        const label = document.createElement('div');
+        label.className = 'step-label';
+        label.style.marginBottom = '8px';
+        label.textContent = `Checked in — ${state.movement} · ${state.flight} (${unassigned.length} awaiting rack)`;
+        wrapper.appendChild(label);
+
+        if (unassigned.length === 0) {
+          const empty = document.createElement('p');
+          empty.style.cssText = 'font-size:12px; color: var(--muted); margin: 0 0 4px;';
+          empty.textContent = 'Everyone checked in for this flight has been assigned a rack.';
+          wrapper.appendChild(empty);
+          return wrapper;
+        }
+
+        const list = document.createElement('div');
+        list.className = 'assign-list';
+        unassigned.forEach((lifter) => {
+          const optionsHtml = assign.options.map((opt) => {
+            const label = assign.kind === 'rack' ? `Rack ${opt}` : opt;
+            return `<option value="${opt}">${label}</option>`;
+          }).join('');
+
+          const row = document.createElement('div');
+          row.className = 'assign-row';
+          row.innerHTML = `
+            <span class="assign-name">${lifter.name}</span>
+            <select class="assign-select">
+              <option value="">Choose rack…</option>
+              ${optionsHtml}
+            </select>
+          `;
+          row.querySelector('.assign-select').addEventListener('change', (event) => {
+            if (!event.target.value) return;
+            if (assign.kind === 'rack') {
+              lifter.rack = Number(event.target.value);
+            } else {
+              lifter.platform = event.target.value;
+            }
+            renderRackTabs();
+            renderRoster();
+          });
+          list.appendChild(row);
+        });
+        wrapper.appendChild(list);
+
+        return wrapper;
+      }
+
+      function buildLifterCard(lifter, assign) {
+        const card = document.createElement('div');
+        card.className = 'lifter-card';
+        const attemptLabels = ['Opener', '2nd', '3rd'];
+
+        let assignSelectHtml = '';
+        if (assign) {
+          const currentValue = assign.kind === 'rack' ? lifter.rack : lifter.platform;
+          const optionsHtml = assign.options.map((opt) => {
+            const value = assign.kind === 'rack' ? opt : opt;
+            const label = assign.kind === 'rack' ? `Rack ${opt}` : opt;
+            const selected = String(currentValue) === String(opt) ? 'selected' : '';
+            return `<option value="${value}" ${selected}>${label}</option>`;
+          }).join('');
+          assignSelectHtml = `<select class="assign-select" data-assign-kind="${assign.kind}">${optionsHtml}</select>`;
+        }
+
+        card.innerHTML = `
+          <div class="lifter-top">
+            <span class="lifter-name">${lifter.name}</span>
+            ${assignSelectHtml}
+          </div>
+          <div class="attempt-mini-row">
+            ${lifter.attempts.map((a, i) => `
+              <div class="attempt-mini">
+                <span class="label">${attemptLabels[i]}</span>
+                <input value="${a.w}" />
+                <div class="attempt-toggle-row">
+                  <button class="attempt-toggle ${a.s === 'good' ? 'good' : ''}">Hit</button>
+                  <button class="attempt-toggle ${a.s === 'miss' ? 'miss' : ''}">Miss</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+
+        if (assign) {
+          const select = card.querySelector('.assign-select');
+          select.addEventListener('change', (event) => {
+            if (assign.kind === 'rack') {
+              lifter.rack = Number(event.target.value);
+            } else {
+              lifter.platform = event.target.value;
+            }
+            renderRackTabs();
+            renderRoster();
+          });
+        }
+
+        return card;
+      }
+
+      function renderAll() {
+        renderCategoryTabs();
+        renderMovementTabs();
+        renderFlightTabs();
+        renderRackTabs();
+        renderRoster();
+      }
+
+      state.rackKey = firstRackKey();
+      renderAll();
+    </script>
+  </body>
+</html>

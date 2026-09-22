@@ -43,6 +43,7 @@ interface RegistrationRow {
   triggerSource: string;
   pingGroupOptIn: boolean;
   includeInLeaderboard: boolean;
+  olympicLiftsOptIn: boolean;
   updatedAt: string;
 }
 
@@ -294,6 +295,7 @@ function buildWaveTimes(startTime: string, totalWaves: number, intervalMinutes: 
 
 export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime }: RegistrationsTabProps) {
   const wavesById = useWaveStore((state) => state.waves);
+  const olympicLiftMovements = useWaveStore((state) => state.olympicLiftMovements);
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollTopRef = useRef<number | null>(null);
   const [registrations, setRegistrations] = useState<RegistrationRow[]>([]);
@@ -367,6 +369,7 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
             triggerSource: data.triggerSource || '',
             pingGroupOptIn: !!data.pingGroupOptIn,
             includeInLeaderboard: data.includeInLeaderboard !== false,
+            olympicLiftsOptIn: data.olympicLiftsOptIn === true,
             updatedAt: data.updatedAt || '',
           } as RegistrationRow;
         });
@@ -416,8 +419,20 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
         const totalWaves = Number(data?.event?.totalWaves);
         const intervalMinutes = Number(data?.timing?.intervalMinutes);
         const maxParticipants = Number(data?.maxParticipants);
+        const liftFlights = (data?.liftEvent?.flights || {}) as Record<string, unknown>;
+        const liftFlightTimes = Object.values(liftFlights)
+          .flatMap((flights) => Array.isArray(flights) ? flights : [])
+          .map((flight) => {
+            const minutes = parseClockToMinutes(String((flight as Record<string, unknown>).startTime || ''));
+            return minutes === null ? null : formatMinutesToLabel(minutes);
+          })
+          .filter((time): time is string => Boolean(time));
 
-        setConfiguredWaveTimes(buildWaveTimes(startTime, totalWaves, intervalMinutes));
+        setConfiguredWaveTimes(
+          data?.timing?.movementMode === 'lift' && liftFlightTimes.length > 0
+            ? Array.from(new Set(liftFlightTimes)).sort((a, b) => (parseClockToMinutes(a) || 0) - (parseClockToMinutes(b) || 0))
+            : buildWaveTimes(startTime, totalWaves, intervalMinutes)
+        );
         setConfiguredCapacity(
           Number.isFinite(maxParticipants) && maxParticipants > 0
             ? Math.floor(maxParticipants)
@@ -609,6 +624,43 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
       }
       return next;
     });
+  };
+
+  const handleOlympicOptInChange = async (row: RegistrationRow, olympicLiftsOptIn: boolean) => {
+    setBusy(row.id, 'Updating Oly');
+
+    try {
+      const { db } = getFirebase();
+      const now = new Date().toISOString();
+      await setDoc(doc(db, 'events', eventId, 'registrations', row.id), {
+        participantId: row.id,
+        olympicLiftsOptIn,
+        updatedAt: now,
+        source: 'manual-ops',
+      }, { merge: true });
+
+      if (row.confirmedWaveTime) {
+        const normalizedConfirmedTime = parseClockToMinutes(row.confirmedWaveTime);
+        const waveEntry = Object.values(wavesById).find((wave) => {
+          const normalizedWaveTime = parseClockToMinutes(String(wave.startTime || ''));
+          return normalizedWaveTime !== null && normalizedWaveTime === normalizedConfirmedTime;
+        });
+
+        if (waveEntry) {
+          await setDoc(doc(db, 'events', eventId, 'waves', waveEntry.id, 'participants', row.id), {
+            id: row.id,
+            olympicLiftsOptIn,
+            updatedAt: now,
+          }, { merge: true });
+          await useWaveStore.getState().loadAll({ preserveActiveEvent: true, force: true });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update Olympic lift opt-in:', error);
+      alert('Failed to update Olympic lift opt-in. Please try again.');
+    } finally {
+      setBusy(row.id, null);
+    }
   };
 
   const runManageAction = async (row: RegistrationRow, action: Exclude<ManageAction, 'cancel'>) => {
@@ -838,6 +890,21 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
 
                             <CommunityOptIcon label="Ping group" glyph="P" optedIn={row.pingGroupOptIn} />
                             <CommunityOptIcon label="Leaderboard" glyph="🏆" optedIn={row.includeInLeaderboard} />
+
+                            {olympicLiftMovements.length > 0 && (
+                              <label className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                                <input
+                                  type="checkbox"
+                                  checked={row.olympicLiftsOptIn}
+                                  disabled={!!rowBusyAction[row.id]}
+                                  onChange={(event) => {
+                                    void handleOlympicOptInChange(row, event.target.checked);
+                                  }}
+                                  className="h-3 w-3 rounded border-amber-300"
+                                />
+                                Oly
+                              </label>
+                            )}
 
                             {getCompanionDisplayName(row.entryMode, row.groupName) && (
                               <span className="relative inline-flex group">

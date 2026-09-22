@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getFirebase } from '@/lib/firebase';
 import { useWaveStore } from '@/store/waveStore';
 import PrintDashboard from './PrintDashboard';
@@ -17,6 +17,15 @@ interface WaveQuickViewCardProps {
       includeInLeaderboard?: boolean;
       swimComfort?: string;
       isFirstTri?: boolean;
+      entryMode?: string;
+      groupName?: string;
+      pingGroupOptIn?: boolean;
+      olympicLiftsOptIn?: boolean;
+      firstPreferenceHour?: string;
+      firstPreferenceFlexibility?: string;
+      secondPreferenceHour?: string;
+      secondPreferenceFlexibility?: string;
+      bodyWeight?: string;
     }>;
     startTime: string;
     coach?: string;
@@ -27,15 +36,32 @@ function waveIdFromTime(label: string): string {
   return `wave-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 }
 
+interface ParticipantMeta {
+  swimComfort: string;
+  isFirstTri: boolean;
+  entryMode: string;
+  groupName: string;
+  pingGroupOptIn: boolean;
+  includeInLeaderboard: boolean;
+  olympicLiftsOptIn: boolean;
+  bodyWeight: string;
+  firstPreferenceHour: string;
+  firstPreferenceFlexibility: string;
+  secondPreferenceHour: string;
+  secondPreferenceFlexibility: string;
+}
+
 export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
-  const { deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, themeColors, activeEventId } = useWaveStore();
+  const { deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, themeColors, activeEventId, movementTimingMode, liftFlights, olympicLiftMovements, olympicLiftsEnabled, customEvents, updateParticipantData, saveWavePerformance, loadAll } = useWaveStore();
+  const isLiftTemplate = movementTimingMode === 'lift' || Object.keys(liftFlights || {}).length > 0 || olympicLiftMovements.length > 0 || !!olympicLiftsEnabled;
+  const scopeLabel = isLiftTemplate ? 'Flight' : 'Wave';
   const accent = themeColors.accent;
   const accentHover = themeColors.accentHover;
   const [newName, setNewName] = useState('');
   const [timeHM, setTimeHM] = useState<string>('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingName, setEditingName] = useState(wave.name);
-  const [participantMeta, setParticipantMeta] = useState<Record<string, { swimComfort: string; isFirstTri: boolean }>>({});
+  const [participantMeta, setParticipantMeta] = useState<Record<string, ParticipantMeta>>({});
 
   const getSwimComfortCode = (swimComfort: string): string => {
     const value = String(swimComfort || '').toLowerCase();
@@ -51,6 +77,20 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
     if (code === 'I') return 'bg-blue-100 text-blue-700 border border-blue-200';
     if (code === 'A') return 'bg-emerald-100 text-emerald-700 border border-emerald-200';
     return 'bg-slate-100 text-slate-700 border border-slate-200';
+  };
+
+  const getEntryModeLabel = (entryMode: string, groupName: string): string => {
+    const value = `${entryMode} ${groupName}`.toLowerCase();
+    if (value.includes('group') || value.includes('team')) return 'Group';
+    if (value.includes('buddy') || value.includes('pair')) return 'Buddy';
+    return 'Single';
+  };
+
+  const getPreferenceSummary = (hour: string, flexibility: string): string => {
+    const cleanHour = String(hour || '').trim();
+    const cleanFlex = String(flexibility || '').trim();
+    if (cleanHour && cleanFlex) return `${cleanHour} / ${cleanFlex}`;
+    return cleanHour || cleanFlex;
   };
 
   useEffect(() => {
@@ -105,6 +145,16 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
           const fallback = {
             swimComfort: String(participant.swimComfort || ''),
             isFirstTri: !!participant.isFirstTri,
+            entryMode: String(participant.entryMode || ''),
+            groupName: String(participant.groupName || ''),
+            pingGroupOptIn: participant.pingGroupOptIn === true,
+            includeInLeaderboard: participant.includeInLeaderboard !== false,
+            olympicLiftsOptIn: participant.olympicLiftsOptIn === true,
+            bodyWeight: String(participant.bodyWeight || ''),
+            firstPreferenceHour: String(participant.firstPreferenceHour || ''),
+            firstPreferenceFlexibility: String(participant.firstPreferenceFlexibility || ''),
+            secondPreferenceHour: String(participant.secondPreferenceHour || ''),
+            secondPreferenceFlexibility: String(participant.secondPreferenceFlexibility || ''),
           };
 
           if (participant.id.startsWith('p-')) {
@@ -118,12 +168,22 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
               return [participant.id, fallback] as const;
             }
 
-            const regData = regSnap.data() as { swimComfort?: string; isFirstTri?: boolean };
+            const regData = regSnap.data() as Partial<ParticipantMeta>;
             return [
               participant.id,
               {
                 swimComfort: String(regData.swimComfort || fallback.swimComfort),
                 isFirstTri: regData.isFirstTri === undefined ? fallback.isFirstTri : !!regData.isFirstTri,
+                entryMode: String(regData.entryMode || fallback.entryMode),
+                groupName: String(regData.groupName || fallback.groupName),
+                pingGroupOptIn: regData.pingGroupOptIn === undefined ? fallback.pingGroupOptIn : !!regData.pingGroupOptIn,
+                includeInLeaderboard: regData.includeInLeaderboard === undefined ? fallback.includeInLeaderboard : regData.includeInLeaderboard !== false,
+                olympicLiftsOptIn: regData.olympicLiftsOptIn === undefined ? fallback.olympicLiftsOptIn : !!regData.olympicLiftsOptIn,
+                bodyWeight: String(regData.bodyWeight || fallback.bodyWeight),
+                firstPreferenceHour: String(regData.firstPreferenceHour || fallback.firstPreferenceHour),
+                firstPreferenceFlexibility: String(regData.firstPreferenceFlexibility || fallback.firstPreferenceFlexibility),
+                secondPreferenceHour: String(regData.secondPreferenceHour || fallback.secondPreferenceHour),
+                secondPreferenceFlexibility: String(regData.secondPreferenceFlexibility || fallback.secondPreferenceFlexibility),
               },
             ] as const;
           } catch {
@@ -157,6 +217,53 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleAddParticipant();
+    }
+  };
+
+  const handleLiftParticipantFieldChange = async (participantId: string, updates: Partial<Pick<ParticipantMeta, 'bodyWeight' | 'olympicLiftsOptIn'>>) => {
+    setParticipantMeta((prev) => ({
+      ...prev,
+      [participantId]: {
+        ...(prev[participantId] || {
+          swimComfort: '',
+          isFirstTri: false,
+          entryMode: '',
+          groupName: '',
+          pingGroupOptIn: false,
+          includeInLeaderboard: true,
+          olympicLiftsOptIn: false,
+          bodyWeight: '',
+          firstPreferenceHour: '',
+          firstPreferenceFlexibility: '',
+          secondPreferenceHour: '',
+          secondPreferenceFlexibility: '',
+        }),
+        ...updates,
+      },
+    }));
+
+    try {
+      const { db } = getFirebase();
+      const now = new Date().toISOString();
+      await setDoc(doc(db, 'events', activeEventId, 'waves', wave.id, 'participants', participantId), {
+        id: participantId,
+        ...updates,
+        updatedAt: now,
+      }, { merge: true });
+
+      if (!participantId.startsWith('p-')) {
+        await setDoc(doc(db, 'events', activeEventId, 'registrations', participantId), {
+          participantId,
+          ...updates,
+          updatedAt: now,
+          source: 'manual-ops',
+        }, { merge: true });
+      }
+
+      await loadAll({ preserveActiveEvent: true, force: true });
+    } catch (error) {
+      console.error('Failed to update lift participant field:', error);
+      alert('Failed to update participant lift details. Please try again.');
     }
   };
 
@@ -213,7 +320,7 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
           <h3 
             className="text-xl font-semibold text-gray-900 cursor-pointer transition-colors hover:text-[var(--wave-accent-hover)]"
             onClick={handleNameEdit}
-            title="Click to edit wave name"
+            title={`Click to edit ${scopeLabel.toLowerCase()} name`}
           >
             {wave.name}
           </h3>
@@ -229,9 +336,9 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
               }
             }}
             className="px-3 py-1 text-sm font-semibold text-white btn-destructive rounded-md"
-            title="Delete wave"
+            title={`Delete ${scopeLabel.toLowerCase()}`}
           >
-            <span className="hidden lg:inline">Delete Wave</span>
+            <span className="hidden lg:inline">Delete {scopeLabel}</span>
             <span className="lg:hidden">Delete</span>
           </button>
         </div>
@@ -298,10 +405,64 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
 
       <div className="mb-4">
         <h4 className="text-sm font-medium text-gray-700 mb-2">Participants:</h4>
-        <div className="space-y-2 max-h-40 overflow-y-auto">
-          {wave.participants.map((participant, index) => (
-            <div key={`${wave.id}-${participant.id}-${index}`}>
-              <div className="flex justify-between items-center text-sm">
+        {isLiftTemplate ? (
+          <div className="space-y-2 overflow-y-auto max-h-[36rem]">
+            {wave.participants.map((participant, index) => {
+              const meta = participantMeta[participant.id];
+              const bodyWeight = meta?.bodyWeight ?? participant.bodyWeight ?? '';
+              const olympicLiftsOptIn = meta?.olympicLiftsOptIn ?? participant.olympicLiftsOptIn === true;
+
+              return (
+                <div key={`${wave.id}-${participant.id}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium text-gray-900">{participant.name}</span>
+                    {isManualWaveEntry(participant.id) && (
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-300 bg-amber-100 text-[10px] font-bold text-amber-800">
+                        *
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {bodyWeight && (
+                      <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
+                        BW {bodyWeight}
+                      </span>
+                    )}
+                    <label className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${olympicLiftsOptIn ? 'border-amber-200 bg-amber-100 text-amber-800' : 'border-slate-200 bg-white text-gray-600'}`}>
+                      <input
+                        type="checkbox"
+                        checked={olympicLiftsOptIn}
+                        onChange={(event) => {
+                          void handleLiftParticipantFieldChange(participant.id, { olympicLiftsOptIn: event.target.checked });
+                        }}
+                        className="h-3 w-3 rounded border-amber-300"
+                      />
+                      Oly
+                    </label>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await deleteParticipant(wave.id, participant.id);
+                        } catch (error) {
+                          console.error('Failed to delete participant:', error);
+                        }
+                      }}
+                      className="text-gray-600 hover:text-gray-800 text-xl leading-none px-1"
+                      title="Remove participant"
+                      aria-label="Remove participant"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-2 overflow-y-auto max-h-40">
+            {wave.participants.map((participant, index) => (
+              <div key={`${wave.id}-${participant.id}-${index}`} className="flex justify-between items-center text-sm">
                 <span className="inline-flex items-center gap-1 text-gray-900 font-medium">
                   {participant.name}
                   {(() => {
@@ -331,15 +492,6 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
                       </>
                     );
                   })()}
-                  {isManualWaveEntry(participant.id) && (
-                    <span
-                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-300 bg-amber-100 text-[10px] font-bold text-amber-800"
-                      title="Manual wave entry (not from registration form)"
-                      aria-label="Manual wave entry"
-                    >
-                      *
-                    </span>
-                  )}
                 </span>
                 <button
                   onClick={async () => {
@@ -356,9 +508,9 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
                   ×
                 </button>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

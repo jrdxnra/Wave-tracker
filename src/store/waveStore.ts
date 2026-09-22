@@ -163,8 +163,8 @@ function sanitizeBrandingForFirestore(branding: EventBranding): EventBranding {
 
 function buildDefaultEventConfig(title: string, date = new Date()): FirebaseConfigData {
   return {
-    customEvents: WAVE_EVENTS,
-    movementUnits: buildMovementUnits(WAVE_EVENTS),
+    customEvents: [],
+    movementUnits: {},
     timing: {
       intervalMinutes: 5,
       workMinutes: 3,
@@ -300,8 +300,8 @@ async function ensureDefaultEventConfigExists(db: Firestore): Promise<void> {
   }
 
   await setDoc(defaultConfigRef, {
-    customEvents: WAVE_EVENTS,
-    movementUnits: buildMovementUnits(WAVE_EVENTS),
+    customEvents: [],
+    movementUnits: {},
     timing: {
       intervalMinutes: 5,
       workMinutes: 3,
@@ -379,6 +379,10 @@ interface FirebaseConfigData {
   };
   liftEvent?: {
     olympicLiftsEnabled?: boolean;
+    olympicLiftMovements?: string[];
+    rackMovements?: string[];
+    rackCount?: number;
+    platformCount?: number;
     flights?: Record<string, LiftFlight[]>;
   };
   eventNotes?: string;
@@ -439,7 +443,11 @@ interface WaveStore {
   movementTimingMode: MovementTimingMode;
   movementIntervals: MovementIntervals;
   liftFlights: LiftFlightsByMovement; // Lift Event only: flights (letter + time block) per lift movement
+  olympicLiftMovements: string[]; // Lift Event only: movements shown only for participants opting into Olympic lifts
   olympicLiftsEnabled: boolean; // Lift Event only: whether Snatch/Clean & Jerk style movements are offered
+  rackMovements: string[]; // Lift Event only: movements that require a physical rack assignment (e.g., Squat, Bench — not Deadlift)
+  rackCount: number; // Lift Event only: number of physical racks available for rack-based movements
+  platformCount: number; // Lift Event only: number of physical platforms available for Olympic lift movements
   maxParticipants: number;
   workoutTimerWorkSeconds: number;
   workoutTimerRestSeconds: number;
@@ -488,7 +496,14 @@ interface WaveStore {
     movementIntervals: MovementIntervals,
     eventId: string
   ) => Promise<void>;
-  setLiftEventConfig: (liftFlights: LiftFlightsByMovement, olympicLiftsEnabled: boolean, eventId: string) => Promise<void>;
+  setLiftEventConfig: (
+    liftFlights: LiftFlightsByMovement,
+    olympicLiftMovements: string[],
+    eventId: string,
+    rackMovements?: string[],
+    rackCount?: number,
+    platformCount?: number
+  ) => Promise<void>;
   setMaxParticipants: (maxParticipants: number, eventId: string) => Promise<void>;
   setWorkoutTimerConfig: (workSeconds: number, restSeconds: number, eventId: string) => Promise<void>;
   setEventConfig: (startDate: string, startTime: string, totalWaves: number, eventId: string) => Promise<void>;
@@ -568,15 +583,19 @@ export const useWaveStore = create<WaveStore>()(
       waves: {},
       currentWaveId: null,
       eventNotes: '',
-      customEvents: WAVE_EVENTS,
-      movementUnits: buildMovementUnits(WAVE_EVENTS),
+      customEvents: [],
+      movementUnits: {},
       intervalMinutes: 5,
       workMinutes: 3,
       restMinutes: 2,
       movementTimingMode: 'global',
       movementIntervals: {},
       liftFlights: {},
+      olympicLiftMovements: [],
       olympicLiftsEnabled: false,
+      rackMovements: [],
+      rackCount: 4,
+      platformCount: 2,
       maxParticipants: 10,
       workoutTimerWorkSeconds: 60,
       workoutTimerRestSeconds: 30,
@@ -604,18 +623,20 @@ export const useWaveStore = create<WaveStore>()(
 
       addWave: (name?: string) => {
         const id = `wave${Date.now()}`;
-        // Find the highest wave number and add 1
+        const isLiftTemplate = get().movementTimingMode === 'lift';
+        const defaultTerm = isLiftTemplate ? 'Flight' : 'Wave';
+
         const existingWaves = Object.values(get().waves);
         const waveNumbers = existingWaves.map(wave => {
-          const match = wave.name.match(/Wave (\d+)/);
+          const match = wave.name.match(/(?:Wave|Flight) (\d+)/);
           return match ? parseInt(match[1], 10) : 0;
         });
         const maxWaveNumber = waveNumbers.length > 0 ? Math.max(...waveNumbers) : 0;
         const nextWaveNumber = maxWaveNumber + 1;
-        
+
         const wave: Wave = {
           id,
-          name: name || `Wave ${nextWaveNumber}`,
+          name: name || `${defaultTerm} ${nextWaveNumber}`,
           participants: [],
           startTime: '',
           coach: '',
@@ -691,6 +712,8 @@ export const useWaveStore = create<WaveStore>()(
           waveData: createInitialWaveData(get().customEvents),
           includeInLeaderboard: true, // Default to checked - must opt out
           pingGroupOptIn: false,
+          olympicLiftsOptIn: false,
+          bodyWeight: '',
         };
         
         const updatedWave = { ...wave, participants: [...wave.participants, participant] };
@@ -725,6 +748,8 @@ export const useWaveStore = create<WaveStore>()(
             waveData: participant.waveData,
             includeInLeaderboard: participant.includeInLeaderboard,
             pingGroupOptIn: participant.pingGroupOptIn === true,
+            olympicLiftsOptIn: participant.olympicLiftsOptIn === true,
+            bodyWeight: participant.bodyWeight || '',
             updatedAt: serverTimestamp(),
           }, { merge: true });
           
@@ -942,11 +967,27 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
 
-      setLiftEventConfig: async (liftFlights, olympicLiftsEnabled, eventId) => {
+      setLiftEventConfig: async (liftFlights, olympicLiftMovements, eventId, rackMovements, rackCount, platformCount) => {
         const state = get();
         const targetEventId = resolveTargetEventId(state, eventId);
+        const normalizedOlympicLiftMovements = Array.from(
+          new Set(olympicLiftMovements.map((movementName) => movementName.trim()).filter(Boolean))
+        );
+        const normalizedRackMovements = Array.from(
+          new Set((rackMovements ?? state.rackMovements).map((movementName) => movementName.trim()).filter(Boolean))
+        );
+        const normalizedRackCount = Math.max(1, Math.round(rackCount ?? state.rackCount));
+        const normalizedPlatformCount = Math.max(1, Math.round(platformCount ?? state.platformCount));
         if (targetEventId === state.activeEventId) {
-          set({ liftFlights, olympicLiftsEnabled });
+          set({
+            movementTimingMode: 'lift',
+            liftFlights,
+            olympicLiftMovements: normalizedOlympicLiftMovements,
+            olympicLiftsEnabled: normalizedOlympicLiftMovements.length > 0,
+            rackMovements: normalizedRackMovements,
+            rackCount: normalizedRackCount,
+            platformCount: normalizedPlatformCount,
+          });
         }
 
         try {
@@ -954,8 +995,19 @@ export const useWaveStore = create<WaveStore>()(
           const configRef = getEventConfigRef(db, targetEventId);
           await setDoc(configRef, {
             liftEvent: {
-              olympicLiftsEnabled,
+              olympicLiftsEnabled: normalizedOlympicLiftMovements.length > 0,
+              olympicLiftMovements: normalizedOlympicLiftMovements,
+              rackMovements: normalizedRackMovements,
+              rackCount: normalizedRackCount,
+              platformCount: normalizedPlatformCount,
               flights: liftFlights,
+            },
+            timing: {
+              intervalMinutes: state.intervalMinutes,
+              workMinutes: state.workMinutes,
+              restMinutes: state.restMinutes,
+              movementMode: 'lift',
+              movementIntervals: state.movementIntervals,
             },
             updatedAt: new Date().toISOString()
           }, { merge: true });
@@ -1395,13 +1447,16 @@ export const useWaveStore = create<WaveStore>()(
           activeWaves: new Set<string>(),
           // Reset other event-specific state if needed
           eventNotes: '',
-          customEvents: WAVE_EVENTS,
-          movementUnits: buildMovementUnits(WAVE_EVENTS),
+          customEvents: [],
+          movementUnits: {},
           intervalMinutes: 5,
           workMinutes: 3,
           restMinutes: 2,
           movementTimingMode: 'global',
           movementIntervals: {},
+          liftFlights: {},
+          olympicLiftMovements: [],
+          olympicLiftsEnabled: false,
           maxParticipants: 10,
           workoutTimerWorkSeconds: 60,
           workoutTimerRestSeconds: 30,
@@ -1503,6 +1558,8 @@ export const useWaveStore = create<WaveStore>()(
                 waveData: participant.waveData,
                 includeInLeaderboard: participant.includeInLeaderboard !== false, // Default to true unless explicitly false
                 pingGroupOptIn: participant.pingGroupOptIn === true,
+                olympicLiftsOptIn: participant.olympicLiftsOptIn === true,
+                bodyWeight: participant.bodyWeight || '',
                 updatedAt: new Date().toISOString()
               }, { merge: true });
             }
@@ -1594,6 +1651,8 @@ export const useWaveStore = create<WaveStore>()(
               waveData: p.waveData,
               includeInLeaderboard: p.includeInLeaderboard !== false, // Default to true unless explicitly false
               pingGroupOptIn: p.pingGroupOptIn === true,
+              olympicLiftsOptIn: p.olympicLiftsOptIn === true,
+              bodyWeight: p.bodyWeight || '',
               updatedAt: serverTimestamp(),
             }, { merge: true });
           }
@@ -1632,6 +1691,22 @@ export const useWaveStore = create<WaveStore>()(
                 (data.movementUnits || {}) as Record<string, unknown>
               ),
             });
+            const rawLiftFlights = data.liftEvent?.flights || {};
+            const rawOlympicLiftMovements = Array.isArray(data.liftEvent?.olympicLiftMovements)
+              ? data.liftEvent.olympicLiftMovements
+              : [];
+            const normalizedOlympicLiftMovements = rawOlympicLiftMovements
+              .map((movementName) => String(movementName || '').trim())
+              .filter(Boolean);
+            const rawRackMovements = Array.isArray(data.liftEvent?.rackMovements)
+              ? data.liftEvent.rackMovements
+              : [];
+            const normalizedRackMovements = rawRackMovements
+              .map((movementName) => String(movementName || '').trim())
+              .filter(Boolean);
+            const hasLiftConfig = Boolean(data.liftEvent) && (
+              Object.keys(rawLiftFlights).length > 0 || normalizedOlympicLiftMovements.length > 0 || Boolean(data.liftEvent?.olympicLiftsEnabled)
+            );
             if (data.timing) {
               const { intervalMinutes, workMinutes, restMinutes, movementMode, movementIntervals } = data.timing;
               const normalizedIntervals = Object.fromEntries(
@@ -1643,18 +1718,26 @@ export const useWaveStore = create<WaveStore>()(
                   },
                 ])
               ) as MovementIntervals;
+              const resolvedMode = hasLiftConfig
+                ? 'lift'
+                : movementMode === 'individual'
+                  ? 'individual'
+                  : movementMode === 'lift'
+                    ? 'lift'
+                    : 'global';
               set({
                 intervalMinutes: Number(intervalMinutes) || 5,
                 workMinutes: Number(workMinutes) || 3,
                 restMinutes: Number(restMinutes) || 2,
-                movementTimingMode: movementMode === 'individual' ? 'individual' : movementMode === 'lift' ? 'lift' : 'global',
+                movementTimingMode: resolvedMode,
                 movementIntervals: normalizedIntervals,
               });
+            } else if (hasLiftConfig) {
+              set({ movementTimingMode: 'lift' });
             }
             if (data.liftEvent) {
-              const rawFlights = data.liftEvent.flights || {};
               const normalizedFlights = Object.fromEntries(
-                Object.entries(rawFlights).map(([movementName, flights]) => [
+                Object.entries(rawLiftFlights).map(([movementName, flights]) => [
                   movementName,
                   (Array.isArray(flights) ? flights : []).map((flight) => ({
                     id: String(flight?.id || ''),
@@ -1666,10 +1749,14 @@ export const useWaveStore = create<WaveStore>()(
               ) as LiftFlightsByMovement;
               set({
                 liftFlights: normalizedFlights,
-                olympicLiftsEnabled: Boolean(data.liftEvent.olympicLiftsEnabled),
+                olympicLiftMovements: normalizedOlympicLiftMovements,
+                olympicLiftsEnabled: normalizedOlympicLiftMovements.length > 0 || Boolean(data.liftEvent.olympicLiftsEnabled),
+                rackMovements: normalizedRackMovements,
+                rackCount: Math.max(1, Math.round(Number(data.liftEvent.rackCount) || 4)),
+                platformCount: Math.max(1, Math.round(Number(data.liftEvent.platformCount) || 2)),
               });
             } else {
-              set({ liftFlights: {}, olympicLiftsEnabled: false });
+              set({ liftFlights: {}, olympicLiftMovements: [], olympicLiftsEnabled: false, rackMovements: [], rackCount: 4, platformCount: 2 });
             }
             if (typeof data.eventNotes === 'string') {
               set({ eventNotes: data.eventNotes });
@@ -2246,6 +2333,8 @@ export const useWaveStore = create<WaveStore>()(
                 waveData: updatedWaveData,
                 includeInLeaderboard: participant.includeInLeaderboard !== false, // Default to true unless explicitly false
                 pingGroupOptIn: participant.pingGroupOptIn === true,
+                olympicLiftsOptIn: participant.olympicLiftsOptIn === true,
+                bodyWeight: participant.bodyWeight || '',
                 updatedAt: new Date().toISOString()
               }, { merge: true });
             }
@@ -2290,6 +2379,8 @@ export const useWaveStore = create<WaveStore>()(
             waveData: participant.waveData,
             includeInLeaderboard: participant.includeInLeaderboard !== false,
             pingGroupOptIn: participant.pingGroupOptIn === true,
+            olympicLiftsOptIn: participant.olympicLiftsOptIn === true,
+            bodyWeight: participant.bodyWeight || '',
             updatedAt: new Date().toISOString(),
           }, { merge: true });
         }
@@ -2336,7 +2427,13 @@ export const useWaveStore = create<WaveStore>()(
         currentWaveId: s.currentWaveId,
         isDataLoaded: s.isDataLoaded,
         lastFirebaseSync: s.lastFirebaseSync,
-        // Global config (customEvents, timing, eventStartDate, etc.) always loads from Firebase
+        customEvents: s.customEvents,
+        movementUnits: s.movementUnits,
+        movementTimingMode: s.movementTimingMode,
+        movementIntervals: s.movementIntervals,
+        liftFlights: s.liftFlights,
+        olympicLiftMovements: s.olympicLiftMovements,
+        olympicLiftsEnabled: s.olympicLiftsEnabled,
       }),
       onRehydrateStorage: () => (state) => {
         // Ensure all required fields have default values (will be overwritten by Firebase load)
@@ -2356,7 +2453,7 @@ export const useWaveStore = create<WaveStore>()(
           // Set defaults for global config that will be loaded from Firebase
           // This prevents crashes while Firebase is loading
           if (!state.customEvents) {
-            state.customEvents = WAVE_EVENTS;
+            state.customEvents = [];
           }
           if (!state.intervalMinutes) {
             state.intervalMinutes = 5;

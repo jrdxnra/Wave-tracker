@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useWaveStore } from '@/store/waveStore';
 import { clientHasMounted, markClientMounted } from '@/lib/clientMounted';
 import PerformanceTable from '@/components/PerformanceTable';
+import LiftPerformanceBoard from '@/components/LiftPerformanceBoard';
 import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
 import ConfigurationModal from '@/components/ConfigurationModal';
 import EventClock from '@/components/EventClock';
@@ -13,7 +14,11 @@ import EventPageHeader from '@/components/EventPageHeader';
 import LoadingState from '@/components/LoadingState';
 
 export default function PerformancePage() {
-  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, eventBranding, activeEventId, eventClockEnabled, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, setUserActivity, isDataLoaded, themeColors } = useWaveStore();
+  const { waves, currentWaveId, eventStartDate, eventStartTime, totalWaves, intervalMinutes, workMinutes, restMinutes, alertSettings, accessPasscode, eventBranding, activeEventId, eventClockEnabled, markWaveAsActive, markWaveAsInactive, clearCacheAndReload, setUserActivity, isDataLoaded, themeColors, movementTimingMode, liftFlights, olympicLiftMovements, olympicLiftsEnabled } = useWaveStore();
+
+  const isLiftTemplate = movementTimingMode === 'lift' || Object.keys(liftFlights || {}).length > 0 || olympicLiftMovements.length > 0 || !!olympicLiftsEnabled;
+  const sectionLabel = isLiftTemplate ? 'Flight' : 'Wave';
+  const sectionLabelPlural = isLiftTemplate ? 'Flights' : 'Waves';
 
   const [mounted, setMounted] = useState(clientHasMounted);
   // Pre-initialize as complete when store already has data (instant page transitions)
@@ -103,22 +108,24 @@ export default function PerformancePage() {
         <main>
           {waveIds.length === 0 ? (
             <div className="text-center py-12">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">No Waves Available</h2>
-              <p className="text-gray-600 mb-6">Create waves in the configuration page first.</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">No {sectionLabelPlural} Available</h2>
+              <p className="text-gray-600 mb-6">Create {sectionLabelPlural.toLowerCase()} in the configuration page first.</p>
               <button
                 onClick={() => router.push('/')}
                 className="btn-primary text-white px-6 py-2 rounded-lg"
               >
-                Go to Wave Configuration
+                Go to {isLiftTemplate ? 'Flight' : 'Wave'} Configuration
               </button>
             </div>
+          ) : isLiftTemplate ? (
+            <LiftPerformanceBoard />
           ) : (
             <div>
               {/* Wave Selection Grid */}
               <div className="mb-8">
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Wave</h3>
-                  
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Select {sectionLabel}</h3>
+
                   {/* Wave Grid */}
                   <div className="grid grid-cols-7 gap-2">
                     {waveIds.map((id) => (
@@ -135,7 +142,7 @@ export default function PerformancePage() {
                         }`}
                       >
                         <span className="hidden lg:inline">{waves[id].name}</span>
-                        <span className="lg:hidden">{waves[id].name.replace('Wave ', '')}</span>
+                        <span className="lg:hidden">{waves[id].name.replace(new RegExp(`${sectionLabel} `, 'i'), '')}</span>
                       </button>
                     ))}
                   </div>
@@ -161,8 +168,8 @@ export default function PerformancePage() {
             <PerformanceTable wave={currentWave} />
               ) : (
                 <div className="text-center py-12">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-4">Select a Wave</h3>
-                  <p className="text-gray-600">Choose a wave tab above to start recording performance data.</p>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-4">Select a {sectionLabel}</h3>
+                  <p className="text-gray-600">Choose a {sectionLabel.toLowerCase()} tab above to start recording performance data.</p>
                 </div>
               )}
             </div>

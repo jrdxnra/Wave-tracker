@@ -153,6 +153,31 @@ function buildWaveTimes(startTime: string, totalWaves: number, intervalMinutes: 
   return times;
 }
 
+function buildLiftFlightTimes(liftFlights: Record<string, LiftFlight[]>): string[] {
+  return Array.from(
+    new Set(
+      Object.values(liftFlights)
+        .flatMap((flights) => flights)
+        .map((flight) => normalizeWaveTimeLabel(flight.startTime))
+        .filter((time): time is string => Boolean(time))
+    )
+  ).sort((a, b) => {
+    const minutesA = parseTimeToMinutes(a);
+    const minutesB = parseTimeToMinutes(b);
+    if (minutesA === null && minutesB === null) return a.localeCompare(b);
+    if (minutesA === null) return 1;
+    if (minutesB === null) return -1;
+    return minutesA - minutesB;
+  });
+}
+
+function countScheduledLiftFlights(liftFlights: Record<string, LiftFlight[]>): number {
+  return Object.values(liftFlights)
+    .flatMap((flights) => flights)
+    .filter((flight) => Boolean(normalizeWaveTimeLabel(flight.startTime)))
+    .length;
+}
+
 function waveIdFromTime(label: string): string {
   return `wave-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 }
@@ -177,7 +202,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     customEvents, movementUnits, updateWaveEvents, setMovementUnits, intervalMinutes, workMinutes, restMinutes, maxParticipants, waves: existingWaves,
     workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode,
     movementTimingMode, movementIntervals,
-    liftFlights, olympicLiftsEnabled, setLiftEventConfig,
+    liftFlights, olympicLiftMovements, setLiftEventConfig,
+    rackMovements, rackCount, platformCount,
     setTimingConfig, setMaxParticipants, setWorkoutTimerConfig, setEventConfig, setAccessPasscode,
     loadGlobalConfig, eventBranding, eventClockEnabled, setEventClockEnabled, themeColors,
     eventsCatalog, activeEventId, loadEventsCatalog, createEvent, deleteEvent, setActiveEvent, updateEventBranding,
@@ -198,7 +224,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [movementTimingModeLocal, setMovementTimingModeLocal] = useState<'global' | 'individual' | 'lift'>(movementTimingMode);
   const [movementIntervalsLocal, setMovementIntervalsLocal] = useState<EditableMovementIntervals>(movementIntervals);
   const [liftFlightsLocal, setLiftFlightsLocal] = useState<Record<string, LiftFlight[]>>(liftFlights);
-  const [olympicLiftsEnabledLocal, setOlympicLiftsEnabledLocal] = useState<boolean>(olympicLiftsEnabled);
+  const [olympicLiftMovementsLocal, setOlympicLiftMovementsLocal] = useState<string[]>(olympicLiftMovements);
+  const [rackMovementsLocal, setRackMovementsLocal] = useState<string[]>(rackMovements);
+  const [rackCountLocal, setRackCountLocal] = useState<number>(rackCount);
+  const [platformCountLocal, setPlatformCountLocal] = useState<number>(platformCount);
   const [maxParticipantsLocal, setMaxParticipantsLocal] = useState<number>(normalizeMaxParticipants(maxParticipants));
   const [timerWorkSeconds, setTimerWorkSeconds] = useState<number>(workoutTimerWorkSeconds);
   const [timerRestSeconds, setTimerRestSeconds] = useState<number>(workoutTimerRestSeconds);
@@ -239,21 +268,31 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [isAddButtonHover, setIsAddButtonHover] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
 
-  const expectedWaveTimes = useMemo(() => buildWaveTimes(startTime, waves, interval), [startTime, waves, interval]);
+  const expectedWaveTimes = useMemo(
+    () => movementTimingModeLocal === 'lift' ? buildLiftFlightTimes(liftFlightsLocal) : buildWaveTimes(startTime, waves, interval),
+    [movementTimingModeLocal, liftFlightsLocal, startTime, waves, interval]
+  );
+  const scheduledLiftFlightCount = useMemo(
+    () => countScheduledLiftFlights(liftFlightsLocal),
+    [liftFlightsLocal]
+  );
   const existingWaveTimes = useMemo(() => {
     return Array.from(
       new Set(
         Object.values(existingWaves)
           .map((wave) => String(wave.startTime || '').trim())
+          .map((time) => normalizeWaveTimeLabel(time) || time)
           .filter(Boolean)
       )
     );
   }, [existingWaves]);
   const missingWaveTimes = useMemo(
-    () => expectedWaveTimes.filter((time) => !existingWaveTimes.includes(time)),
+    () => expectedWaveTimes.filter((time) => !existingWaveTimes.includes(normalizeWaveTimeLabel(time) || time)),
     [expectedWaveTimes, existingWaveTimes]
   );
-  const waveScheduleReady = Boolean(startDate && startTime && Number.isFinite(waves) && waves > 0 && Number.isFinite(interval) && interval > 0);
+  const waveScheduleReady = movementTimingModeLocal === 'lift'
+    ? Boolean(startDate && expectedWaveTimes.length > 0)
+    : Boolean(startDate && startTime && Number.isFinite(waves) && waves > 0 && Number.isFinite(interval) && interval > 0);
 
   // Load fresh config from Firebase when modal opens and sync local state
   useEffect(() => {
@@ -289,7 +328,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setMovementTimingModeLocal(movementTimingMode);
     setMovementIntervalsLocal(movementIntervals);
     setLiftFlightsLocal(liftFlights);
-    setOlympicLiftsEnabledLocal(olympicLiftsEnabled);
+    setOlympicLiftMovementsLocal(olympicLiftMovements);
+    setRackMovementsLocal(rackMovements);
+    setRackCountLocal(rackCount);
+    setPlatformCountLocal(platformCount);
     setMaxParticipantsLocal(normalizeMaxParticipants(maxParticipants));
     setTimerWorkSeconds(workoutTimerWorkSeconds);
     setTimerRestSeconds(workoutTimerRestSeconds);
@@ -300,7 +342,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     setPasscodeProtectionEnabledLocal(passcodeProtectionEnabled);
     setDefaultStartEventIdLocal(defaultStartEventId);
     setFeedbackEnabledLocal(feedbackEnabled);
-  }, [customEvents, movementUnits, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, liftFlights, olympicLiftsEnabled, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode, passcodeProtectionEnabled, defaultStartEventId, feedbackEnabled]);
+  }, [customEvents, movementUnits, intervalMinutes, workMinutes, restMinutes, movementTimingMode, movementIntervals, liftFlights, olympicLiftMovements, rackMovements, rackCount, platformCount, maxParticipants, workoutTimerWorkSeconds, workoutTimerRestSeconds, eventStartDate, eventStartTime, totalWaves, accessPasscode, passcodeProtectionEnabled, defaultStartEventId, feedbackEnabled]);
 
   useEffect(() => {
     setMovementIntervalsLocal((prev) => {
@@ -341,6 +383,12 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       setNewEventMovementTimingMode('global');
       setPinnedFormUrl('');
       setPinnedSheetUrl('');
+      // New events start with a blank movement list, not the previously active event's movements.
+      setEvents([]);
+      setMovementUnitsLocal({});
+      setMovementIntervalsLocal({});
+      setLiftFlightsLocal({});
+      setOlympicLiftMovementsLocal([]);
     } else {
       setSelectedEventId(activeEventId);
       setBrandTitle(eventBranding.title);
@@ -396,8 +444,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   };
 
   const handleCreateConfiguredWaves = async () => {
+    const termLower = movementTimingModeLocal === 'lift' ? 'flight' : 'wave';
+    const termCap = movementTimingModeLocal === 'lift' ? 'Flight' : 'Wave';
     if (!waveScheduleReady) {
-      alert('Enter event start date, event start time, total waves, and wave interval first.');
+      alert(`Enter event start date, event start time, total ${termLower}s, and ${termLower} interval first.`);
       return;
     }
 
@@ -422,7 +472,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         normalizeMovementIntervals(movementIntervalsLocal, work, rest),
         saveEventId
       );
-      await setEventConfig(startDate, startTime, Math.max(1, Math.round(waves)), saveEventId);
+      const firstScheduledTime = expectedWaveTimes[0] || startTime;
+      await setEventConfig(startDate, firstScheduledTime, movementTimingModeLocal === 'lift' ? expectedWaveTimes.length : Math.max(1, Math.round(waves)), saveEventId);
       await setMaxParticipants(maxParticipantsLocal, saveEventId);
 
       const { db } = getFirebase();
@@ -444,7 +495,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         expectedWaveTimes.map((time) =>
           setDoc(doc(db, 'events', saveEventId, 'waves', waveIdFromTime(time)), {
             id: waveIdFromTime(time),
-            name: `Wave ${time}`,
+            name: `${termCap} ${time}`,
             startTime: time,
             coach: '',
             updatedAt: now,
@@ -486,15 +537,15 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       const createdCount = Math.max(0, missingBefore.length - stillMissing.length);
 
       if (stillMissing.length > 0) {
-        alert(`Synced ${expectedWaveTimes.length} wave(s), but ${stillMissing.length} expected time(s) are still missing.`);
+        alert(`Synced ${expectedWaveTimes.length} ${termLower}(s), but ${stillMissing.length} expected time(s) are still missing.`);
       } else if (createdCount > 0) {
-        alert(`Created ${expectedWaveTimes.length} wave(s). ${createdCount} were newly added.`);
+        alert(`Created ${expectedWaveTimes.length} ${termLower}(s). ${createdCount} were newly added.`);
       } else {
-        alert(`All ${expectedWaveTimes.length} wave(s) already exist.`);
+        alert(`All ${expectedWaveTimes.length} ${termLower}(s) already exist.`);
       }
     } catch (error) {
       console.error('❌ Failed to create waves:', error);
-      alert(error instanceof Error ? error.message : 'Failed to create waves.');
+      alert(error instanceof Error ? error.message : `Failed to create ${termLower}s.`);
     } finally {
       setIsCreatingWaves(false);
     }
@@ -535,7 +586,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           );
 
           if (newEventMovementTimingMode === 'lift') {
-            await setLiftEventConfig(liftFlightsLocal, olympicLiftsEnabledLocal, createdEventId);
+            await setLiftEventConfig(liftFlightsLocal, olympicLiftMovementsLocal, createdEventId, rackMovementsLocal, rackCountLocal, platformCountLocal);
           }
 
           await setMovementUnits(movementUnitsLocal, createdEventId);
@@ -600,11 +651,16 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         saveEventId
       );
       if (movementTimingModeLocal === 'lift') {
-        await setLiftEventConfig(liftFlightsLocal, olympicLiftsEnabledLocal, saveEventId);
+        await setLiftEventConfig(liftFlightsLocal, olympicLiftMovementsLocal, saveEventId, rackMovementsLocal, rackCountLocal, platformCountLocal);
       }
       await setMaxParticipants(maxParticipantsLocal, saveEventId);
       await setWorkoutTimerConfig(Math.max(1, Math.round(timerWorkSeconds)), Math.max(1, Math.round(timerRestSeconds)), saveEventId);
-      await setEventConfig(startDate, startTime, Math.max(1, Math.round(waves)), saveEventId);
+      await setEventConfig(
+        startDate,
+        movementTimingModeLocal === 'lift' ? (expectedWaveTimes[0] || startTime) : startTime,
+        movementTimingModeLocal === 'lift' ? Math.max(1, expectedWaveTimes.length) : Math.max(1, Math.round(waves)),
+        saveEventId
+      );
       await setAccessPasscode(passcode);
       await setPasscodeProtectionEnabled(passcodeProtectionEnabledLocal);
       await setFeedbackEnabled(feedbackEnabledLocal, saveEventId);
@@ -683,6 +739,12 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       delete next[targetName];
       return next;
     });
+    setLiftFlightsLocal((prev) => {
+      const next = { ...prev };
+      delete next[targetName];
+      return next;
+    });
+    setOlympicLiftMovementsLocal((prev) => prev.filter((name) => name !== targetName));
   };
 
   const handleMoveUp = (index: number) => {
@@ -989,6 +1051,11 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     };
   }, []);
 
+  const isLiftTemplate = movementTimingModeLocal === 'lift';
+  const waveTermSingular = isLiftTemplate ? 'Flight' : 'Wave';
+  const waveTermPlural = isLiftTemplate ? 'Flights' : 'Waves';
+  const waveTermLower = isLiftTemplate ? 'flight' : 'wave';
+
   let tabContent: JSX.Element | null = null;
   if (isHydratingConfig) {
     tabContent = (
@@ -1221,14 +1288,14 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-lg font-medium text-gray-900">Edit Current Event</h3>
             {renderInfoTip(
-              'Changes will apply to all waves and participants.',
+              `Changes will apply to all ${waveTermLower}s and participants.`,
               'Edit Current Event tips'
             )}
           </div>
-          <p className="text-sm text-gray-600">This section controls the active event schedule and wave movement setup.</p>
+          <p className="text-sm text-gray-600">This section controls the active event schedule and {waveTermLower} movement setup.</p>
         </div>
 
-        <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className={`mb-4 grid grid-cols-1 ${movementTimingModeLocal === 'lift' ? '' : 'sm:grid-cols-2'} gap-4`}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Event Start Date</label>
             <input
@@ -1238,6 +1305,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
             />
           </div>
+          {movementTimingModeLocal !== 'lift' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Event Start Time</label>
             <input
@@ -1247,11 +1315,40 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
             />
           </div>
+          )}
         </div>
 
+        {movementTimingModeLocal === 'lift' && (
+          <div className="mb-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Number of Racks</label>
+              <input
+                type="number"
+                min={1}
+                value={rackCountLocal}
+                onChange={(e) => setRackCountLocal(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
+              />
+              <p className="mt-1 text-xs text-gray-500">Physical racks available for rack-based movements (e.g., Squat, Bench).</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Number of Platforms</label>
+              <input
+                type="number"
+                min={1}
+                value={platformCountLocal}
+                onChange={(e) => setPlatformCountLocal(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
+              />
+              <p className="mt-1 text-xs text-gray-500">Platforms available for Olympic lift movements (e.g., Snatch, Clean &amp; Jerk).</p>
+            </div>
+          </div>
+        )}
+
         <div className="mb-4 flex flex-nowrap items-start gap-4">
+          {movementTimingModeLocal !== 'lift' && (
           <div className="min-w-0 flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Total Waves</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Total {waveTermPlural}</label>
             <input
               type="number"
               min={1}
@@ -1260,6 +1357,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
             />
           </div>
+          )}
           <div className="min-w-0 flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">Max Participants</label>
             <select
@@ -1280,14 +1378,18 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
           <div className="flex flex-col gap-3">
             <div>
-              <div className="text-sm font-semibold text-gray-900">Create Waves</div>
+              <div className="text-sm font-semibold text-gray-900">Create {waveTermPlural}</div>
               <div className="text-xs text-gray-600">
-                Creates the wave docs from start date, start time, total waves, and interval.
+                {movementTimingModeLocal === 'lift'
+                  ? `Creates flight docs from movement flight start times. ${scheduledLiftFlightCount} movement flight${scheduledLiftFlightCount === 1 ? '' : 's'} found across ${expectedWaveTimes.length} unique start time${expectedWaveTimes.length === 1 ? '' : 's'}.`
+                  : `Creates the ${waveTermLower} docs from start date, start time, total ${waveTermPlural.toLowerCase()}, and interval.`
+                }
               </div>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              {movementTimingModeLocal !== 'lift' && (
               <div className="w-full sm:max-w-[180px]">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Wave Start Interval (min)</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{waveTermSingular} Start Interval (min)</label>
                 <input
                   type="number"
                   min={1}
@@ -1296,6 +1398,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   className="w-full h-9 px-3 border border-gray-300 rounded-md input-focus-brand"
                 />
               </div>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -1309,9 +1412,15 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               >
                 {isCreatingWaves
                   ? 'Creating...'
-                  : missingWaveTimes.length > 0
-                    ? `Create / Sync Waves (${missingWaveTimes.length} missing)`
-                    : `Waves Ready (${expectedWaveTimes.length})`
+                  : movementTimingModeLocal === 'lift'
+                    ? expectedWaveTimes.length === 0
+                      ? 'Add Flight Start Times'
+                      : missingWaveTimes.length > 0
+                        ? `Create / Sync Flight Times (${missingWaveTimes.length} missing of ${expectedWaveTimes.length})`
+                        : `Flight Times Ready (${expectedWaveTimes.length} scheduled)`
+                    : missingWaveTimes.length > 0
+                      ? `Create / Sync ${waveTermPlural} (${missingWaveTimes.length} missing)`
+                      : `${waveTermPlural} Ready (${expectedWaveTimes.length})`
                 }
               </button>
             </div>
@@ -1408,230 +1517,258 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   existingName.trim().toLowerCase() === movementName.trim().toLowerCase()
               );
 
+              const liftFlights = liftFlightsLocal[movementName] || [];
+
               return (
-              <div
-                key={index}
-                draggable
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, index)}
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-move items-center"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs font-semibold text-gray-500 w-6 text-right">{index + 1}.</span>
-                  <input
-                    type="text"
-                    value={movementName}
-                    onChange={(e) => {
-                      const nextName = e.target.value;
-                      const prevName = movementName;
-                      setEvents((prev) => prev.map((name, nameIndex) => (nameIndex === index ? nextName : name)));
-                      setMovementUnitsLocal((prev) => {
-                        const next = { ...prev };
-                        const prevUnit = next[prevName] || 'reps';
-                        delete next[prevName];
-                        if (nextName.trim()) {
-                          next[nextName] = next[nextName] || prevUnit;
-                        }
-                        return next;
-                      });
-                    }}
-                    className={`w-full min-w-0 h-9 px-3 border rounded-md text-sm text-gray-900 bg-white input-focus-brand ${duplicateName ? 'border-red-300' : 'border-gray-300'}`}
-                    aria-label={`Movement name ${index + 1}`}
-                  />
-                  <select
-                    value={movementUnitsLocal[movementName] || 'reps'}
-                    onChange={(e) => {
-                      const nextUnit = e.target.value as MovementUnit;
-                      setMovementUnitsLocal((prev) => ({
-                        ...prev,
-                        [movementName]: nextUnit,
-                      }));
-                    }}
-                    className="h-9 w-24 shrink-0 rounded-md border border-gray-300 bg-white px-2 text-sm input-focus-brand"
-                    aria-label={`Score unit for ${movementName}`}
+                <div key={index} className="overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                  <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, index)}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 p-3 hover:bg-gray-100 cursor-move items-center"
                   >
-                    {MOVEMENT_UNIT_OPTIONS.map((unit) => (
-                      <option key={unit} value={unit}>{unit}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-nowrap items-center justify-end gap-2 shrink-0">
-                  {movementTimingModeLocal === 'individual' && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-xs font-medium text-gray-500">W</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-semibold text-gray-500 w-6 text-right">{index + 1}.</span>
                       <input
-                        type="number"
-                        min={0}
-                        value={movementTiming.workMinutes}
+                        type="text"
+                        value={movementName}
                         onChange={(e) => {
-                          const nextWork = parseEditableMinutes(e.target.value);
-                          setMovementIntervalsLocal((prev) => ({
-                            ...prev,
-                            [movementName]: {
-                              workMinutes: nextWork,
-                              restMinutes: prev[movementName]?.restMinutes ?? movementTiming.restMinutes,
-                            },
-                          }));
+                          const nextName = e.target.value;
+                          const prevName = movementName;
+                          setEvents((prev) => prev.map((name, nameIndex) => (nameIndex === index ? nextName : name)));
+                          setMovementUnitsLocal((prev) => {
+                            const next = { ...prev };
+                            const prevUnit = next[prevName] || 'reps';
+                            delete next[prevName];
+                            if (nextName.trim()) {
+                              next[nextName] = next[nextName] || prevUnit;
+                            }
+                            return next;
+                          });
+                          setLiftFlightsLocal((prev) => {
+                            const next = { ...prev };
+                            const prevFlights = next[prevName];
+                            delete next[prevName];
+                            if (nextName.trim() && prevFlights) {
+                              next[nextName] = prevFlights;
+                            }
+                            return next;
+                          });
+                          setOlympicLiftMovementsLocal((prev) => prev.map((name) => (name === prevName ? nextName : name)).filter(Boolean));
                         }}
-                        onBlur={() => {
-                          setMovementIntervalsLocal((prev) => ({
-                            ...prev,
-                            [movementName]: {
-                              workMinutes: normalizeMinutes(prev[movementName]?.workMinutes ?? movementTiming.workMinutes),
-                              restMinutes: prev[movementName]?.restMinutes ?? movementTiming.restMinutes,
-                            },
-                          }));
-                        }}
-                        className="w-12 sm:w-14 h-9 px-1 sm:px-2 shrink-0 border border-gray-300 rounded-md text-sm input-focus-brand"
-                        aria-label={`Work minutes for ${movementName}`}
+                        className={`w-full min-w-0 h-9 px-3 border rounded-md text-sm text-gray-900 bg-white input-focus-brand ${duplicateName ? 'border-red-300' : 'border-gray-300'}`}
+                        aria-label={`Movement name ${index + 1}`}
                       />
-                      <span className="text-xs font-medium text-gray-500">R</span>
-                      <input
-                        type="number"
-                        min={0}
-                        value={movementTiming.restMinutes}
+                      <select
+                        value={movementUnitsLocal[movementName] || 'reps'}
                         onChange={(e) => {
-                          const nextRest = parseEditableMinutes(e.target.value);
-                          setMovementIntervalsLocal((prev) => ({
+                          const nextUnit = e.target.value as MovementUnit;
+                          setMovementUnitsLocal((prev) => ({
                             ...prev,
-                            [movementName]: {
-                              workMinutes: prev[movementName]?.workMinutes ?? movementTiming.workMinutes,
-                              restMinutes: nextRest,
-                            },
+                            [movementName]: nextUnit,
                           }));
                         }}
-                        onBlur={() => {
-                          setMovementIntervalsLocal((prev) => ({
-                            ...prev,
-                            [movementName]: {
-                              workMinutes: prev[movementName]?.workMinutes ?? movementTiming.workMinutes,
-                              restMinutes: normalizeMinutes(prev[movementName]?.restMinutes ?? movementTiming.restMinutes),
-                            },
-                          }));
-                        }}
-                        className="w-12 sm:w-14 h-9 px-1 sm:px-2 shrink-0 border border-gray-300 rounded-md text-sm input-focus-brand"
-                        aria-label={`Rest minutes for ${movementName}`}
-                      />
+                        className="h-9 w-24 shrink-0 rounded-md border border-gray-300 bg-white px-2 text-sm input-focus-brand"
+                        aria-label={`Score unit for ${movementName}`}
+                      >
+                        {MOVEMENT_UNIT_OPTIONS.map((unit) => (
+                          <option key={unit} value={unit}>{unit}</option>
+                        ))}
+                      </select>
                     </div>
+                    <div className="flex flex-nowrap items-center justify-end gap-2 shrink-0">
+                      {movementTimingModeLocal === 'individual' && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-xs font-medium text-gray-500">W</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={movementTiming.workMinutes}
+                            onChange={(e) => {
+                              const nextWork = parseEditableMinutes(e.target.value);
+                              setMovementIntervalsLocal((prev) => ({
+                                ...prev,
+                                [movementName]: {
+                                  workMinutes: nextWork,
+                                  restMinutes: prev[movementName]?.restMinutes ?? movementTiming.restMinutes,
+                                },
+                              }));
+                            }}
+                            onBlur={() => {
+                              setMovementIntervalsLocal((prev) => ({
+                                ...prev,
+                                [movementName]: {
+                                  workMinutes: normalizeMinutes(prev[movementName]?.workMinutes ?? movementTiming.workMinutes),
+                                  restMinutes: prev[movementName]?.restMinutes ?? movementTiming.restMinutes,
+                                },
+                              }));
+                            }}
+                            className="w-12 sm:w-14 h-9 px-1 sm:px-2 shrink-0 border border-gray-300 rounded-md text-sm input-focus-brand"
+                            aria-label={`Work minutes for ${movementName}`}
+                          />
+                          <span className="text-xs font-medium text-gray-500">R</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={movementTiming.restMinutes}
+                            onChange={(e) => {
+                              const nextRest = parseEditableMinutes(e.target.value);
+                              setMovementIntervalsLocal((prev) => ({
+                                ...prev,
+                                [movementName]: {
+                                  workMinutes: prev[movementName]?.workMinutes ?? movementTiming.workMinutes,
+                                  restMinutes: nextRest,
+                                },
+                              }));
+                            }}
+                            onBlur={() => {
+                              setMovementIntervalsLocal((prev) => ({
+                                ...prev,
+                                [movementName]: {
+                                  workMinutes: prev[movementName]?.workMinutes ?? movementTiming.workMinutes,
+                                  restMinutes: normalizeMinutes(prev[movementName]?.restMinutes ?? movementTiming.restMinutes),
+                                },
+                              }));
+                            }}
+                            className="w-12 sm:w-14 h-9 px-1 sm:px-2 shrink-0 border border-gray-300 rounded-md text-sm input-focus-brand"
+                            aria-label={`Rest minutes for ${movementName}`}
+                          />
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleMoveUp(index)}
+                        disabled={index === 0}
+                        className="shrink-0 p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Move Up"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        onClick={() => handleMoveDown(index)}
+                        disabled={index === events.length - 1}
+                        className="shrink-0 p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Move Down"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        onClick={() => handleRemoveEvent(index)}
+                        className="shrink-0 p-1 text-red-500 hover:text-red-700"
+                        title="Remove"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+
+                  {movementTimingModeLocal === 'lift' && (
+                    <details className="group border-t border-gray-200 bg-white" open={liftFlights.length > 0}>
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                        <span className="flex items-center gap-2">
+                          <span className="text-gray-400 transition-transform group-open:rotate-90">&gt;</span>
+                          Flights
+                          <span className="font-medium text-gray-500">{liftFlights.length}</span>
+                        </span>
+                        <span className="flex items-center gap-3">
+                          <label
+                            className="flex cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-gray-600"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={olympicLiftMovementsLocal.includes(movementName)}
+                              onChange={(event) => {
+                                const checked = event.target.checked;
+                                setOlympicLiftMovementsLocal((prev) => checked
+                                  ? Array.from(new Set([...prev, movementName]))
+                                  : prev.filter((name) => name !== movementName)
+                                );
+                              }}
+                              className="h-3.5 w-3.5 rounded border-gray-300"
+                            />
+                            Oly lift
+                          </label>
+                          <label
+                            className="flex cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-gray-600"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={rackMovementsLocal.includes(movementName)}
+                              onChange={(event) => {
+                                const checked = event.target.checked;
+                                setRackMovementsLocal((prev) => checked
+                                  ? Array.from(new Set([...prev, movementName]))
+                                  : prev.filter((name) => name !== movementName)
+                                );
+                              }}
+                              className="h-3.5 w-3.5 rounded border-gray-300"
+                            />
+                            Uses rack
+                          </label>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              handleAddFlight(movementName);
+                            }}
+                            className="rounded-md px-2.5 py-1 text-[11px] font-semibold text-white"
+                            style={{ backgroundColor: themeColors.accent }}
+                          >
+                            + Flight
+                          </button>
+                        </span>
+                      </summary>
+
+                      {liftFlights.length === 0 ? (
+                        <p className="px-8 pb-3 text-xs text-gray-500">No flights yet. Add one above.</p>
+                      ) : (
+                        <div className="space-y-2 px-3 pb-3">
+                          {liftFlights.map((flight) => (
+                            <div key={flight.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-2 items-center">
+                              <input
+                                type="text"
+                                value={flight.label}
+                                onChange={(e) => handleUpdateFlight(movementName, flight.id, 'label', e.target.value)}
+                                placeholder="Flight label (e.g., Flight A)"
+                                className="w-full h-9 px-2 border border-gray-300 rounded-md bg-white text-sm input-focus-brand"
+                                aria-label={`Flight label for ${movementName}`}
+                              />
+                              <input
+                                type="time"
+                                value={flight.startTime}
+                                onChange={(e) => handleUpdateFlight(movementName, flight.id, 'startTime', e.target.value)}
+                                className="h-9 px-2 border border-gray-300 rounded-md bg-white text-sm input-focus-brand"
+                                aria-label={`Flight start time for ${movementName}`}
+                              />
+                              <input
+                                type="time"
+                                value={flight.endTime}
+                                onChange={(e) => handleUpdateFlight(movementName, flight.id, 'endTime', e.target.value)}
+                                className="h-9 px-2 border border-gray-300 rounded-md bg-white text-sm input-focus-brand"
+                                aria-label={`Flight end time for ${movementName}`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFlight(movementName, flight.id)}
+                                className="shrink-0 p-1 text-red-500 hover:text-red-700"
+                                title="Remove flight"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </details>
                   )}
-                  <button
-                    onClick={() => handleMoveUp(index)}
-                    disabled={index === 0}
-                    className="shrink-0 p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Move Up"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    onClick={() => handleMoveDown(index)}
-                    disabled={index === events.length - 1}
-                    className="shrink-0 p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Move Down"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    onClick={() => handleRemoveEvent(index)}
-                    className="shrink-0 p-1 text-red-500 hover:text-red-700"
-                    title="Remove"
-                  >
-                    ×
-                  </button>
                 </div>
-              </div>
               );
             })}
           </div>
         </div>
-
-        {movementTimingModeLocal === 'lift' && (
-          <div className="mb-6">
-            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900">Enable Olympic Lifts</h4>
-                <p className="text-xs text-gray-600">Turn on if this event offers Snatch / Clean &amp; Jerk style lifts in addition to the main lifts.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOlympicLiftsEnabledLocal((prev) => !prev)}
-                className="min-w-[100px] rounded-md px-3 py-2 text-sm font-semibold text-white transition-colors"
-                style={{ backgroundColor: olympicLiftsEnabledLocal ? themeColors.accent : '#6b7280' }}
-              >
-                {olympicLiftsEnabledLocal ? 'Enabled' : 'Disabled'}
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-lg font-medium text-gray-900">Flight Schedule</h3>
-              {renderInfoTip(
-                'Add one or more flights per lift (e.g., Flight A, B, C, D), each with its own start and end time. Flight capacity uses the Max Participants setting above.',
-                'Flight Schedule tips'
-              )}
-            </div>
-
-            <div className="space-y-3">
-              {events.map((movementName) => {
-                const flights = liftFlightsLocal[movementName] || [];
-                return (
-                  <div key={movementName} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-gray-900">{movementName}</h4>
-                      <button
-                        type="button"
-                        onClick={() => handleAddFlight(movementName)}
-                        className="rounded-md px-3 py-1 text-xs font-semibold text-white"
-                        style={{ backgroundColor: themeColors.accent }}
-                      >
-                        + Add Flight
-                      </button>
-                    </div>
-                    {flights.length === 0 ? (
-                      <p className="text-xs text-gray-500">No flights yet. Add one above.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {flights.map((flight) => (
-                          <div key={flight.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-2 items-center">
-                            <input
-                              type="text"
-                              value={flight.label}
-                              onChange={(e) => handleUpdateFlight(movementName, flight.id, 'label', e.target.value)}
-                              placeholder="Flight label (e.g., Flight A)"
-                              className="w-full h-9 px-2 border border-gray-300 rounded-md bg-white text-sm input-focus-brand"
-                              aria-label={`Flight label for ${movementName}`}
-                            />
-                            <input
-                              type="time"
-                              value={flight.startTime}
-                              onChange={(e) => handleUpdateFlight(movementName, flight.id, 'startTime', e.target.value)}
-                              className="h-9 px-2 border border-gray-300 rounded-md bg-white text-sm input-focus-brand"
-                              aria-label={`Flight start time for ${movementName}`}
-                            />
-                            <input
-                              type="time"
-                              value={flight.endTime}
-                              onChange={(e) => handleUpdateFlight(movementName, flight.id, 'endTime', e.target.value)}
-                              className="h-9 px-2 border border-gray-300 rounded-md bg-white text-sm input-focus-brand"
-                              aria-label={`Flight end time for ${movementName}`}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveFlight(movementName, flight.id)}
-                              className="shrink-0 p-1 text-red-500 hover:text-red-700"
-                              title="Remove flight"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
       </>
     );
@@ -1774,7 +1911,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-medium text-gray-900">Event Clock/Timeline</h3>
                   {renderInfoTip(
-                    'Wave Start Interval: Time between each wave starting (e.g., Wave 1 at 8:00, Wave 2 at 8:10).\nWork + Rest: Duration of each movement station. Movement times on performance/print sheets are calculated using Work + Rest.',
+                    `${waveTermSingular} Start Interval: Time between each ${waveTermLower} starting (e.g., ${waveTermSingular} 1 at 8:00, ${waveTermSingular} 2 at 8:10).\nWork + Rest: Duration of each movement station. Movement times on performance/print sheets are calculated using Work + Rest.`,
                     'Event Clock tips',
                     'right'
                   )}
@@ -1964,7 +2101,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                   color: activeTab === 'movement' ? themeColors.accent : undefined,
                 }}
               >
-                Wave Config
+                {waveTermSingular} Config
               </button>
               <button
                 type="button"

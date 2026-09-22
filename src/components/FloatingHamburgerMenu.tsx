@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useWaveStore } from '@/store/waveStore';
 
 interface FloatingHamburgerMenuProps {
   onSettingsClick: () => void;
@@ -9,6 +10,11 @@ interface FloatingHamburgerMenuProps {
 
 export default function FloatingHamburgerMenu({ onSettingsClick, currentPage }: FloatingHamburgerMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const movementTimingMode = useWaveStore((state) => state.movementTimingMode);
+  const liftFlights = useWaveStore((state) => state.liftFlights);
+  const olympicLiftsEnabled = useWaveStore((state) => state.olympicLiftsEnabled);
+  const isLiftTemplate = movementTimingMode === 'lift' || Object.keys(liftFlights || {}).length > 0 || !!olympicLiftsEnabled;
+  const configLabel = isLiftTemplate ? 'Flight Config' : 'Wave Config';
 
   const navigateTo = (path: string) => {
     setIsOpen(false);
@@ -45,7 +51,7 @@ export default function FloatingHamburgerMenu({ onSettingsClick, currentPage }: 
     ] : currentPage === 'performance' ? [
       {
         id: 'waves',
-        label: 'Wave Config',
+        label: configLabel,
         icon: '🌊',
         onClick: () => navigateTo('/'),
         color: 'hover:bg-blue-500 text-blue-600 hover:text-white'
@@ -67,7 +73,7 @@ export default function FloatingHamburgerMenu({ onSettingsClick, currentPage }: 
       },
       {
         id: 'waves',
-        label: 'Wave Config',
+        label: configLabel,
         icon: '🌊',
         onClick: () => navigateTo('/'),
         color: 'hover:bg-blue-500 text-blue-600 hover:text-white'

@@ -7,6 +7,7 @@ import { useWaveStore } from '@/store/waveStore';
 import { clientHasMounted, markClientMounted } from '@/lib/clientMounted';
 import { getFirebase } from '@/lib/firebase';
 import WaveQuickViewCard from '@/components/WaveQuickViewCard';
+import LiftFlightBoard from '@/components/LiftFlightBoard';
 import ConfigurationModal from '@/components/ConfigurationModal';
 import FloatingHamburgerMenu from '@/components/FloatingHamburgerMenu';
 import PasscodeProtection from '@/components/PasscodeProtection';
@@ -65,7 +66,16 @@ export default function Page() {
     loadAll,
     clearCacheAndReload,
     themeColors,
+    movementTimingMode,
+    liftFlights,
+    olympicLiftMovements,
+    olympicLiftsEnabled,
   } = useWaveStore();
+
+  const isLiftTemplate = movementTimingMode === 'lift' || Object.keys(liftFlights || {}).length > 0 || olympicLiftMovements.length > 0 || !!olympicLiftsEnabled;
+  const listLabel = isLiftTemplate ? 'Flights' : 'Waves';
+  const singularLabel = isLiftTemplate ? 'Flight' : 'Wave';
+  const lowerLabel = isLiftTemplate ? 'flight' : 'wave';
 
   const visibleWaveEntries = (() => {
     const entries = Object.entries(waves);
@@ -191,8 +201,8 @@ export default function Page() {
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
           <EventPageHeader
             eventBranding={eventBranding}
-            pageLabel="Wave Tracker"
-            subtitle="Manage wave based events with ease"
+            pageLabel={isLiftTemplate ? 'Flight Tracker' : 'Wave Tracker'}
+            subtitle={isLiftTemplate ? 'Manage flight based events with ease' : 'Manage wave based events with ease'}
           />
 
         <div className="mb-6">
@@ -203,7 +213,7 @@ export default function Page() {
                 className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${activeTab === 'waves' ? 'text-white' : 'text-gray-700 hover:bg-gray-100'}`}
                 style={activeTab === 'waves' ? { backgroundColor: accent } : undefined}
               >
-                Waves
+                {listLabel}
               </button>
               <button
                 onClick={() => setActiveTab('registrations')}
@@ -244,40 +254,57 @@ export default function Page() {
           {activeTab === 'waves' ? (
             <>
               <div className="mb-8">
-                <div id="all-waves-quick-view-container" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {waveIds.length === 0 ? (
-                    <div className="col-span-full flex flex-col items-center justify-center py-12">
-                      <p className="text-center text-gray-500 mb-6">
-                        No waves created yet. Create your first wave to get started!
-                      </p>
+                {isLiftTemplate ? (
+                  waveIds.length === 0 ? (
+                    <div className="bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col items-center justify-center py-12">
+                      <p className="text-center text-gray-500 mb-6">No flights created yet. Create your first flight to get started!</p>
                       <button
                         onClick={() => addWave()}
                         className="btn-primary text-white rounded-lg shadow-lg px-8 py-4 text-lg font-bold flex flex-col items-center justify-center transform hover:scale-105 transition-all duration-200"
                         style={{ backgroundColor: accent }}
-                        title="Add your first wave"
+                        title="Add your first flight"
                       >
                         <span className="text-4xl mb-2">+</span>
-                        <span>Create First Wave</span>
+                        <span>Create First Flight</span>
                       </button>
                     </div>
                   ) : (
-                    <>
-                      {waveIds.map((id) => <WaveQuickViewCard key={id} wave={waves[id]} />)}
-                      {/* Dynamic Add Wave Button positioned as next card */}
-                      <div className="flex items-center justify-center">
+                    <LiftFlightBoard waveIds={waveIds} waves={waves} onAddFlight={() => addWave()} />
+                  )
+                ) : (
+                  <div id="all-waves-quick-view-container" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {waveIds.length === 0 ? (
+                      <div className="col-span-full flex flex-col items-center justify-center py-12">
+                        <p className="text-center text-gray-500 mb-6">No waves created yet. Create your first wave to get started!</p>
                         <button
                           onClick={() => addWave()}
-                          className="btn-primary text-white rounded-lg shadow-lg px-6 py-8 text-sm font-bold flex flex-col items-center justify-center w-full h-full min-h-[200px] transform hover:scale-105 transition-all duration-200"
+                          className="btn-primary text-white rounded-lg shadow-lg px-8 py-4 text-lg font-bold flex flex-col items-center justify-center transform hover:scale-105 transition-all duration-200"
                           style={{ backgroundColor: accent }}
-                          title="Add new wave"
+                          title="Add your first wave"
                         >
-                          <span className="text-3xl mb-2">+</span>
-                          <span>Add Wave</span>
+                          <span className="text-4xl mb-2">+</span>
+                          <span>Create First Wave</span>
                         </button>
                       </div>
-                    </>
-                  )}
-                </div>
+                    ) : (
+                      <>
+                        {waveIds.map((id) => <WaveQuickViewCard key={id} wave={waves[id]} />)}
+                        {/* Dynamic Add Wave Button positioned as next card */}
+                        <div className="flex items-center justify-center">
+                          <button
+                            onClick={() => addWave()}
+                            className="btn-primary text-white rounded-lg shadow-lg px-6 py-8 text-sm font-bold flex flex-col items-center justify-center w-full h-full min-h-[200px] transform hover:scale-105 transition-all duration-200"
+                            style={{ backgroundColor: accent }}
+                            title="Add new wave"
+                          >
+                            <span className="text-3xl mb-2">+</span>
+                            <span>Add Wave</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">

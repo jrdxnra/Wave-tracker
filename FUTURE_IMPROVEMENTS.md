@@ -26,6 +26,12 @@
 - Include a setup UI/checklist in the app for copying the script, pasting it into Apps Script, and running trigger installation.
 - Consider piloting this flow on G-ROX later if that event needs a registration form integration.
 
+### Rebuild "Waitlist" and "Analytics" tabs (missing from GitHub repo)
+
+- Production (`wavetracker.web.app`) currently has 4 tabs: Waves, Registrations, Waitlist, Analytics. This repo (all branches) only has Waves and Registrations — Waitlist and Analytics were deployed straight to prod from a source that was never committed/pushed to GitHub, and are not recoverable (no other Codespace, no session history, no exposed sourcemaps on the live bundle). Full investigation details in [TROUBLESHOOTING_LOG.md](TROUBLESHOOTING_LOG.md) (2026-09-21 entry).
+- Plan: rebuild both tabs from scratch as new features in this repo, using the live production site as a functional/visual reference (screenshots or a walkthrough of what each tab currently does).
+- **Hard rule until rebuilt: no prod deploys** — deploying this repo to production as-is would erase those two tabs.
+
 ### New "Lift Event" template
 
 This graduated from an idea to an active in-progress build. Full plan, decisions, and task checklist now live in [LIFT_EVENT_PLAN.md](LIFT_EVENT_PLAN.md) (with [LIFT_EVENT_TROUBLESHOOTING.md](LIFT_EVENT_TROUBLESHOOTING.md) tracking issues as we build it) — see those files instead of this entry going forward.

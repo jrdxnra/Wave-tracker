@@ -4,6 +4,11 @@ export interface Participant {
   waveData: Record<string, string>;
   includeInLeaderboard?: boolean; // Optional for backwards compatibility
   pingGroupOptIn?: boolean; // Optional for backwards compatibility
+  olympicLiftsOptIn?: boolean; // Lift Event only: participant is doing Olympic lift movements
+  bodyWeight?: string; // Lift Event only: participant bodyweight for lifting score context
+  rackHeight?: string; // Lift Event only: rack height setting collected at check-in
+  liftMovementFlights?: Record<string, string>; // Lift Event only: flight letter per movement (e.g. Squat: "A", Bench: "C") — a lifter's flight can differ per movement
+  liftMovementRacks?: Record<string, string>; // Lift Event only: rack/platform assignment per movement (e.g. Squat: "Rack 1", Snatch: "Platform A")
 }
 
 export type MovementUnit = 'reps' | 'laps' | 'cals' | 'meters' | 'seconds' | 'rounds';

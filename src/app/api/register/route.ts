@@ -41,6 +41,8 @@ interface RegistrationPayload {
   chat_link?: string;
   calendar_invite_sent?: boolean;
   include_in_leaderboard?: boolean;
+  olympic_lifts_opt_in?: boolean;
+  body_weight?: string;
   volunteer_role?: string;
   internal_notes?: string;
   portal_url?: string;
@@ -467,6 +469,19 @@ async function getEventWaveTimes(db: Firestore, eventId: string): Promise<string
   const data = configSnap.data() as Record<string, unknown>;
   const event = (data.event || {}) as Record<string, unknown>;
   const timing = (data.timing || {}) as Record<string, unknown>;
+  const liftEvent = (data.liftEvent || {}) as Record<string, unknown>;
+
+  if (timing.movementMode === 'lift') {
+    const flightsByMovement = (liftEvent.flights || {}) as Record<string, unknown>;
+    const liftTimes = Object.values(flightsByMovement)
+      .flatMap((flights) => Array.isArray(flights) ? flights : [])
+      .map((flight) => normalizeWaveTime((flight as Record<string, unknown>).startTime as string | undefined))
+      .filter((time): time is string => Boolean(time));
+
+    if (liftTimes.length > 0) {
+      return sortUniqueWaveTimes(liftTimes);
+    }
+  }
 
   const startTime = String(event.startTime || '').trim();
   const startMinutes = parseTimeToMinutes(startTime);
@@ -572,6 +587,8 @@ export async function POST(req: NextRequest) {
     const portalUrl = payload.portal_url || `/portal/${participantId}?event=${eventId}`;
     const includeInLeaderboard = payload.include_in_leaderboard !== false;
     const pingGroupOptIn = !!payload.ping_group_opt_in;
+    const olympicLiftsOptIn = !!payload.olympic_lifts_opt_in;
+    const bodyWeight = String(payload.body_weight || '').trim();
 
     await ensureEventVisible(db, eventId, eventName);
     if (identity.source === 'row_number') {
@@ -635,6 +652,8 @@ export async function POST(req: NextRequest) {
       chatLink: payload.chat_link || '',
       calendarInviteSent: !!payload.calendar_invite_sent,
       includeInLeaderboard,
+      olympicLiftsOptIn,
+      bodyWeight,
       volunteerRole: payload.volunteer_role || '',
       internalNotes: payload.internal_notes || '',
       portalUrl,
@@ -656,6 +675,8 @@ export async function POST(req: NextRequest) {
         waveData: {},
         includeInLeaderboard,
         pingGroupOptIn,
+        olympicLiftsOptIn,
+        bodyWeight,
         swimComfort: payload.swim_comfort || '',
         isFirstTri: !!payload.is_first_tri,
         registrationStatus: finalStatus,

@@ -32,7 +32,7 @@ export default function Leaderboard() {
   const [mounted, setMounted] = useState(clientHasMounted);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
-  const { waves, customEvents, movementUnits, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, eventBranding, clearCacheAndReload, loadAll, feedbackEnabled, submitFeedback, themeColors, isDataLoaded, eventClockEnabled, alertSettings, activeEventId } = useWaveStore();
+  const { waves, customEvents, movementUnits, olympicLiftMovements, eventStartDate, eventStartTime, intervalMinutes, workMinutes, restMinutes, totalWaves, eventBranding, clearCacheAndReload, loadAll, feedbackEnabled, submitFeedback, themeColors, isDataLoaded, eventClockEnabled, alertSettings, activeEventId } = useWaveStore();
   const [exerciseLeaderboards, setExerciseLeaderboards] = useState<ExerciseLeaderboard[]>([]);
   const [totalLeaderboard, setTotalLeaderboard] = useState<LeaderboardEntry[]>([]);
   // State for top N selection for Total leaderboard
@@ -85,6 +85,10 @@ export default function Leaderboard() {
 
         // Process each exercise
         customEvents.forEach(event => {
+          if (olympicLiftMovements.includes(event) && participant.olympicLiftsOptIn !== true) {
+            return;
+          }
+
           const valueStr = (participant.waveData || {})[event] || '';
           const value = parseFloat(valueStr) || 0;
           
@@ -128,7 +132,7 @@ export default function Leaderboard() {
 
     setExerciseLeaderboards(sortedExerciseLeaderboards);
     setTotalLeaderboard(sortedTotalLeaderboard);
-  }, [mounted, waves, customEvents, movementUnits]);
+  }, [mounted, waves, customEvents, movementUnits, olympicLiftMovements]);
 
   // Show loading spinner if not mounted or data not loaded
   if (!mounted || !isDataLoaded) {
