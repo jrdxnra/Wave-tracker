@@ -22,6 +22,7 @@ interface FlightParticipant {
   bodyWeight?: string;
   rackHeight?: string;
   liftMovementFlights?: Record<string, string>;
+  liftMovementRackHeights?: Record<string, string>;
 }
 
 interface FlightWave {
@@ -39,12 +40,12 @@ interface ParticipantMeta {
   includeInLeaderboard: boolean;
   olympicLiftsOptIn: boolean;
   bodyWeight: string;
-  rackHeight: string;
   firstPreferenceHour: string;
   firstPreferenceFlexibility: string;
   secondPreferenceHour: string;
   secondPreferenceFlexibility: string;
   liftMovementFlights: Record<string, string>;
+  liftMovementRackHeights: Record<string, string>;
 }
 
 const emptyMeta: ParticipantMeta = {
@@ -54,13 +55,15 @@ const emptyMeta: ParticipantMeta = {
   includeInLeaderboard: true,
   olympicLiftsOptIn: false,
   bodyWeight: '',
-  rackHeight: '',
   firstPreferenceHour: '',
   firstPreferenceFlexibility: '',
   secondPreferenceHour: '',
   secondPreferenceFlexibility: '',
   liftMovementFlights: {},
+  liftMovementRackHeights: {},
 };
+
+const RACK_HEIGHT_OPTIONS = Array.from({ length: 8 }, (_, i) => String(i + 7));
 
 const getAttemptField = (event: string, attemptNumber: number) => `${event}__attempt_${attemptNumber}`;
 
@@ -150,12 +153,12 @@ export default function LiftFlightBoard({ waveIds, waves, onAddFlight }: LiftFli
             includeInLeaderboard: participant.includeInLeaderboard !== false,
             olympicLiftsOptIn: participant.olympicLiftsOptIn === true,
             bodyWeight: String(participant.bodyWeight || ''),
-            rackHeight: String(participant.rackHeight || ''),
             firstPreferenceHour: String(participant.firstPreferenceHour || ''),
             firstPreferenceFlexibility: String(participant.firstPreferenceFlexibility || ''),
             secondPreferenceHour: String(participant.secondPreferenceHour || ''),
             secondPreferenceFlexibility: String(participant.secondPreferenceFlexibility || ''),
             liftMovementFlights: { ...(participant.liftMovementFlights || {}) },
+            liftMovementRackHeights: { ...(participant.liftMovementRackHeights || {}) },
           };
 
           if (participant.id.startsWith('p-')) {
@@ -177,12 +180,12 @@ export default function LiftFlightBoard({ waveIds, waves, onAddFlight }: LiftFli
                 includeInLeaderboard: regData.includeInLeaderboard === undefined ? fallback.includeInLeaderboard : regData.includeInLeaderboard !== false,
                 olympicLiftsOptIn: regData.olympicLiftsOptIn === undefined ? fallback.olympicLiftsOptIn : !!regData.olympicLiftsOptIn,
                 bodyWeight: String(regData.bodyWeight || fallback.bodyWeight),
-                rackHeight: String(regData.rackHeight || fallback.rackHeight),
                 firstPreferenceHour: String(regData.firstPreferenceHour || fallback.firstPreferenceHour),
                 firstPreferenceFlexibility: String(regData.firstPreferenceFlexibility || fallback.firstPreferenceFlexibility),
                 secondPreferenceHour: String(regData.secondPreferenceHour || fallback.secondPreferenceHour),
                 secondPreferenceFlexibility: String(regData.secondPreferenceFlexibility || fallback.secondPreferenceFlexibility),
                 liftMovementFlights: { ...fallback.liftMovementFlights, ...(regData.liftMovementFlights || {}) },
+                liftMovementRackHeights: { ...fallback.liftMovementRackHeights, ...(regData.liftMovementRackHeights || {}) },
               },
             ] as const;
           } catch {
@@ -225,7 +228,7 @@ export default function LiftFlightBoard({ waveIds, waves, onAddFlight }: LiftFli
   const handleLiftParticipantFieldChange = async (
     waveId: string,
     participantId: string,
-    updates: Partial<Pick<ParticipantMeta, 'bodyWeight' | 'olympicLiftsOptIn' | 'rackHeight' | 'liftMovementFlights'>>
+    updates: Partial<Pick<ParticipantMeta, 'bodyWeight' | 'olympicLiftsOptIn' | 'liftMovementFlights' | 'liftMovementRackHeights'>>
   ) => {
     setParticipantMeta((prev) => ({
       ...prev,
@@ -293,6 +296,23 @@ export default function LiftFlightBoard({ waveIds, waves, onAddFlight }: LiftFli
 
   const handleMovementFlightCommit = async (waveId: string, participantId: string, liftMovementFlights: Record<string, string>) => {
     await handleLiftParticipantFieldChange(waveId, participantId, { liftMovementFlights });
+  };
+
+  const handleRackHeightChange = async (waveId: string, participantId: string, movementName: string, rackHeight: string) => {
+    setParticipantMeta((prev) => {
+      const current = prev[participantId] || emptyMeta;
+      return {
+        ...prev,
+        [participantId]: {
+          ...current,
+          liftMovementRackHeights: { ...current.liftMovementRackHeights, [movementName]: rackHeight },
+        },
+      };
+    });
+
+    const meta = participantMeta[participantId];
+    const next = { ...(meta?.liftMovementRackHeights || {}), [movementName]: rackHeight };
+    await handleLiftParticipantFieldChange(waveId, participantId, { liftMovementRackHeights: next });
   };
 
   const handleAddParticipant = async () => {
@@ -460,7 +480,6 @@ export default function LiftFlightBoard({ waveIds, waves, onAddFlight }: LiftFli
             const firstPref = getPreferenceSummary(meta?.firstPreferenceHour || '', meta?.firstPreferenceFlexibility || '');
             const secondPref = getPreferenceSummary(meta?.secondPreferenceHour || '', meta?.secondPreferenceFlexibility || '');
             const bodyWeight = meta?.bodyWeight ?? selected.participant.bodyWeight ?? '';
-            const rackHeight = meta?.rackHeight ?? selected.participant.rackHeight ?? '';
             const olympicLiftsOptIn = meta?.olympicLiftsOptIn ?? selected.participant.olympicLiftsOptIn === true;
             const includeInLeaderboard = meta?.includeInLeaderboard ?? selected.participant.includeInLeaderboard !== false;
 
@@ -502,25 +521,6 @@ export default function LiftFlightBoard({ waveIds, waves, onAddFlight }: LiftFli
                       }}
                       onBlur={(e) => {
                         void handleLiftParticipantFieldChange(selected.waveId, selected.participant.id, { bodyWeight: e.target.value.trim() });
-                      }}
-                      className="input-focus-brand w-full p-2 border border-gray-300 rounded-md text-sm"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="block text-xs font-medium text-gray-600 mb-1">Rack Height</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={rackHeight}
-                      onChange={(e) => {
-                        const nextRackHeight = e.target.value;
-                        setParticipantMeta((prev) => ({
-                          ...prev,
-                          [selected.participant.id]: { ...(prev[selected.participant.id] || emptyMeta), rackHeight: nextRackHeight },
-                        }));
-                      }}
-                      onBlur={(e) => {
-                        void handleLiftParticipantFieldChange(selected.waveId, selected.participant.id, { rackHeight: e.target.value.trim() });
                       }}
                       className="input-focus-brand w-full p-2 border border-gray-300 rounded-md text-sm"
                     />
@@ -609,6 +609,8 @@ export default function LiftFlightBoard({ waveIds, waves, onAddFlight }: LiftFli
                       const requiresOlympicOptIn = olympicLiftMovements.includes(event);
                       const canEditMovement = !requiresOlympicOptIn || olympicLiftsOptIn;
                       const waveData = selected.participant.waveData || {};
+                      const usesRack = rackMovements.includes(event);
+                      const currentRackHeight = meta?.liftMovementRackHeights?.[event] ?? selected.participant.liftMovementRackHeights?.[event] ?? '';
                       return (
                         <div key={event}>
                           <div className="flex items-center gap-1 mb-1">
@@ -617,7 +619,7 @@ export default function LiftFlightBoard({ waveIds, waves, onAddFlight }: LiftFli
                               <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">OLY</span>
                             )}
                           </div>
-                          <div className="grid grid-cols-3 gap-1">
+                          <div className={`grid gap-1 ${usesRack ? 'grid-cols-4' : 'grid-cols-3'}`}>
                             {[1, 2, 3].map((attemptNumber) => (
                               <input
                                 key={`${event}-${attemptNumber}`}
@@ -632,6 +634,19 @@ export default function LiftFlightBoard({ waveIds, waves, onAddFlight }: LiftFli
                                 aria-label={`${event} attempt ${attemptNumber} weight`}
                               />
                             ))}
+                            {usesRack && (
+                              <select
+                                value={currentRackHeight}
+                                onChange={(e) => void handleRackHeightChange(selected.waveId, selected.participant.id, event, e.target.value)}
+                                className="input-focus-brand w-full px-1 py-1 border border-gray-300 rounded text-xs bg-white"
+                                aria-label={`${event} rack height`}
+                              >
+                                <option value="">Height</option>
+                                {RACK_HEIGHT_OPTIONS.map((h) => (
+                                  <option key={h} value={h}>{h}</option>
+                                ))}
+                              </select>
+                            )}
                           </div>
                           {canEditMovement && waveData[event] && (
                             <div className="text-[10px] font-medium text-gray-400 mt-0.5">Best: {waveData[event]}</div>

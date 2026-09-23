@@ -123,3 +123,17 @@ For general, non-Lift-Event repo issues, use [TROUBLESHOOTING_LOG.md](TROUBLESHO
 - Division field still not collected anywhere (deferred per plan, tied to the Google Form update).
 
 ---
+
+## 2026-09-23 — Rack height moved to per-movement, added to Performance page for rack matching
+
+**Related plan section:** "3. Check-in", "4. Live Rack Entry"
+**Symptom:** Rack height was a single generic field per participant (collected at check-in), but rack setup differs per movement (a lifter's Squat rack height isn't necessarily their Bench rack height). There was also no way to see/set rack height on the Performance page to help match a lifter to a compatible rack.
+**Fix:**
+- Replaced the single `rackHeight` field with `liftMovementRackHeights?: Record<string, string>` on `Participant` (movement → rack height/pin number).
+- **Check-in (`LiftFlightBoard`)**: removed the generic top "Rack Height" input; added a rack height dropdown (1–20) next to each rack movement's 3 attempt inputs in the "Attempt Weights" section — only shown for movements flagged `rackMovements`, not Deadlift/Oly.
+- **Performance page (`LiftPerformanceBoard`)**: added the same rack height dropdown in two places — the "Checked in" assign list (so staff can view/set height before picking a rack) and the live rack card (so it can be adjusted after assignment too). Only shown for rack movements, not platform/floor.
+**Files changed:** `src/types/index.ts`, `src/components/LiftFlightBoard.tsx`, `src/components/LiftPerformanceBoard.tsx`
+
+**Still open:** rack height doesn't yet auto-suggest a rack based on matching height — it's just visible/editable data for staff to manually match when assigning.
+
+---
