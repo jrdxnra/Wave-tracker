@@ -264,24 +264,26 @@ export default function LiftPerformanceBoard() {
                 })}
               </div>
               {movementUsesRack && (
-                <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <span className="text-[10px] font-semibold text-gray-500">Set height:</span>
-                  {rackKeys.map((key) => (
-                    <label key={key} className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
-                      {key}
-                      <select
-                        value={rackHeightSettings[movement]?.[key] || ''}
-                        onChange={(e) => void setRackHeightSetting(movement, key, e.target.value, activeEventId)}
-                        className="h-6 rounded border border-gray-300 bg-white px-1 text-[11px] font-semibold text-gray-700"
-                      >
-                        <option value="">—</option>
-                        {RACK_HEIGHT_OPTIONS.map((h) => (
-                          <option key={h} value={h}>{h}</option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                </div>
+                <>
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-gray-500 mt-1">Set height</span>
+                  <div className="flex flex-wrap gap-2">
+                    {rackKeys.map((key) => (
+                      <label key={key} className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
+                        {key}
+                        <select
+                          value={rackHeightSettings[movement]?.[key] || ''}
+                          onChange={(e) => void setRackHeightSetting(movement, key, e.target.value, activeEventId)}
+                          className="h-6 rounded border border-gray-300 bg-white px-1 text-[11px] font-semibold text-gray-700"
+                        >
+                          <option value="">—</option>
+                          {RACK_HEIGHT_OPTIONS.map((h) => (
+                            <option key={h} value={h}>{h}</option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           )}
