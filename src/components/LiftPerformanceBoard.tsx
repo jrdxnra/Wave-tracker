@@ -275,17 +275,40 @@ export default function LiftPerformanceBoard() {
             <div className="flex flex-col gap-2 border-l border-gray-200 pl-6">
               <span className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{movementIsPlatform ? 'Platform' : 'Rack'}</span>
               <div className="flex flex-wrap gap-2">
-                {rackKeys.map((key) => (
-                  <button
-                    key={key}
-                    onClick={() => setRackKey(key)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${rackKey === key ? 'text-white border-transparent' : 'text-gray-600 border-gray-300 hover:bg-gray-50'}`}
-                    style={rackKey === key ? { backgroundColor: accent } : undefined}
-                  >
-                    {key}
-                  </button>
-                ))}
+                {rackKeys.map((key) => {
+                  const height = rackHeightSettings[movement]?.[key];
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setRackKey(key)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${rackKey === key ? 'text-white border-transparent' : 'text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                      style={rackKey === key ? { backgroundColor: accent } : undefined}
+                    >
+                      {key}{height ? ` (${height})` : ''}
+                    </button>
+                  );
+                })}
               </div>
+              {movementUsesRack && (
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <span className="text-[10px] font-semibold text-gray-500">Set height:</span>
+                  {rackKeys.map((key) => (
+                    <label key={key} className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
+                      {key}
+                      <select
+                        value={rackHeightSettings[movement]?.[key] || ''}
+                        onChange={(e) => void setRackHeightSetting(movement, key, e.target.value, activeEventId)}
+                        className="h-6 rounded border border-gray-300 bg-white px-1 text-[11px] font-semibold text-gray-700"
+                      >
+                        <option value="">—</option>
+                        {RACK_HEIGHT_OPTIONS.map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -328,9 +351,12 @@ export default function LiftPerformanceBoard() {
                         className="h-8 rounded-md border border-gray-300 bg-white px-2 text-xs font-semibold text-gray-700"
                       >
                         <option value="" disabled>Choose {movementIsPlatform ? 'platform' : 'rack'}…</option>
-                        {rackKeys.map((key) => (
-                          <option key={key} value={key}>{key}</option>
-                        ))}
+                        {rackKeys.map((key) => {
+                          const height = rackHeightSettings[movement]?.[key];
+                          return (
+                            <option key={key} value={key}>{key}{height ? ` (${height})` : ''}</option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
@@ -340,24 +366,9 @@ export default function LiftPerformanceBoard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <h4 className="text-sm font-semibold text-gray-900">{rackKey} — live view</h4>
-              {movementUsesRack && (
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
-                  Rack height
-                  <select
-                    value={rackHeightSettings[movement]?.[rackKey] || ''}
-                    onChange={(e) => void setRackHeightSetting(movement, rackKey, e.target.value, activeEventId)}
-                    className="h-7 rounded-md border border-gray-300 bg-white px-1.5 text-xs font-semibold text-gray-700"
-                  >
-                    <option value="">—</option>
-                    {RACK_HEIGHT_OPTIONS.map((h) => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
+            <h4 className="text-sm font-semibold text-gray-900 mb-3">
+              {rackKey}{rackHeightSettings[movement]?.[rackKey] ? ` (${rackHeightSettings[movement]?.[rackKey]})` : ''} — live view
+            </h4>
             {assignedToSelectedRack.length === 0 ? (
               <p className="text-xs text-gray-500">No lifters assigned to {rackKey} yet.</p>
             ) : (
@@ -371,7 +382,6 @@ export default function LiftPerformanceBoard() {
                     isPlatform={movementIsPlatform}
                     showRackHeight={movementUsesRack}
                     onAssign={handleAssignRack}
-                    onRackHeightChange={handleRackHeightChange}
                     onAttemptChange={handleAttemptChange}
                     onAttemptStatusChange={handleAttemptStatusChange}
                     onAttemptBlur={handleAttemptBlur}
@@ -397,7 +407,6 @@ export default function LiftPerformanceBoard() {
                   isPlatform={false}
                   showRackHeight={false}
                   onAssign={handleAssignRack}
-                  onRackHeightChange={handleRackHeightChange}
                   onAttemptChange={handleAttemptChange}
                   onAttemptStatusChange={handleAttemptStatusChange}
                   onAttemptBlur={handleAttemptBlur}
@@ -418,7 +427,6 @@ function LifterAttemptCard({
   isPlatform,
   showRackHeight,
   onAssign,
-  onRackHeightChange,
   onAttemptChange,
   onAttemptStatusChange,
   onAttemptBlur,
@@ -429,7 +437,6 @@ function LifterAttemptCard({
   isPlatform: boolean;
   showRackHeight: boolean;
   onAssign: (entry: RosterEntry, rackKey: string) => Promise<void>;
-  onRackHeightChange: (entry: RosterEntry, rackHeight: string) => Promise<void>;
   onAttemptChange: (entry: RosterEntry, attemptNumber: number, value: string) => void;
   onAttemptStatusChange: (entry: RosterEntry, attemptNumber: number, status: AttemptStatus) => void;
   onAttemptBlur: (waveId: string) => Promise<void>;
@@ -441,21 +448,15 @@ function LifterAttemptCard({
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-sm font-bold text-gray-900">{entry.participant.name}</span>
-        <div className="flex items-center gap-1.5">
-          {showRackHeight && (
-            <select
-              value={currentRackHeight}
-              onChange={(e) => void onRackHeightChange(entry, e.target.value)}
-              className="h-7 rounded-md border border-gray-300 bg-white px-1.5 text-[11px] font-semibold text-gray-700"
-              title="Rack height"
-            >
-              <option value="">Height</option>
-              {RACK_HEIGHT_OPTIONS.map((h) => (
-                <option key={h} value={h}>{h}</option>
-              ))}
-            </select>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-sm font-bold text-gray-900 truncate">{entry.participant.name}</span>
+          {showRackHeight && currentRackHeight && (
+            <span className="shrink-0 rounded-full bg-blue-100 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[10px] font-bold">
+              H{currentRackHeight}
+            </span>
           )}
+        </div>
+        <div className="flex items-center gap-1.5">
           {rackKeys.length > 0 && (
             <select
               value={currentRack}
