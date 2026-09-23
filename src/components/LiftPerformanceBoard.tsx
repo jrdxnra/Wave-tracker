@@ -148,32 +148,6 @@ export default function LiftPerformanceBoard() {
     }
   };
 
-  const handleRackHeightChange = async (entry: RosterEntry, rackHeight: string) => {
-    const nextHeights = { ...(entry.participant.liftMovementRackHeights || {}), [movement]: rackHeight };
-    try {
-      const { db } = getFirebase();
-      const now = new Date().toISOString();
-      await setDoc(doc(db, 'events', activeEventId, 'waves', entry.waveId, 'participants', entry.participant.id), {
-        id: entry.participant.id,
-        liftMovementRackHeights: nextHeights,
-        updatedAt: now,
-      }, { merge: true });
-
-      if (!entry.participant.id.startsWith('p-')) {
-        await setDoc(doc(db, 'events', activeEventId, 'registrations', entry.participant.id), {
-          participantId: entry.participant.id,
-          liftMovementRackHeights: nextHeights,
-          updatedAt: now,
-          source: 'manual-ops',
-        }, { merge: true });
-      }
-
-      await loadAll({ preserveActiveEvent: true, force: true });
-    } catch (error) {
-      console.error('Failed to update rack height:', error);
-      alert('Failed to update rack height. Please try again.');
-    }
-  };
 
   const handleAttemptChange = (entry: RosterEntry, attemptNumber: number, value: string) => {
     const field = getAttemptField(movement, attemptNumber);
@@ -328,23 +302,18 @@ export default function LiftPerformanceBoard() {
               <p className="text-xs text-gray-500">Everyone checked in for this flight has been assigned.</p>
             ) : (
               <div className="space-y-2 mt-2">
-                {unassigned.map((entry) => (
-                  <div key={entry.participant.id} className="flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-                    <span className="text-sm font-semibold text-gray-900">{entry.participant.name}</span>
-                    <div className="flex items-center gap-1.5">
-                      {movementUsesRack && (
-                        <select
-                          value={entry.participant.liftMovementRackHeights?.[movement] || ''}
-                          onChange={(e) => void handleRackHeightChange(entry, e.target.value)}
-                          className="h-8 rounded-md border border-gray-300 bg-white px-2 text-xs font-semibold text-gray-700"
-                          title="Rack height"
-                        >
-                          <option value="">Height</option>
-                          {RACK_HEIGHT_OPTIONS.map((h) => (
-                            <option key={h} value={h}>{h}</option>
-                          ))}
-                        </select>
-                      )}
+                {unassigned.map((entry) => {
+                  const lifterHeight = entry.participant.liftMovementRackHeights?.[movement];
+                  return (
+                    <div key={entry.participant.id} className="flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm font-semibold text-gray-900 truncate">{entry.participant.name}</span>
+                        {movementUsesRack && lifterHeight && (
+                          <span className="shrink-0 rounded-full bg-blue-100 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[10px] font-bold">
+                            H{lifterHeight}
+                          </span>
+                        )}
+                      </div>
                       <select
                         defaultValue=""
                         onChange={(e) => void handleAssignRack(entry, e.target.value)}
@@ -359,8 +328,8 @@ export default function LiftPerformanceBoard() {
                         })}
                       </select>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
