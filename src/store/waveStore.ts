@@ -383,6 +383,7 @@ interface FirebaseConfigData {
     rackMovements?: string[];
     rackCount?: number;
     platformCount?: number;
+    rackHeightSettings?: Record<string, Record<string, string>>;
     flights?: Record<string, LiftFlight[]>;
   };
   eventNotes?: string;
@@ -448,6 +449,7 @@ interface WaveStore {
   rackMovements: string[]; // Lift Event only: movements that require a physical rack assignment (e.g., Squat, Bench — not Deadlift)
   rackCount: number; // Lift Event only: number of physical racks available for rack-based movements
   platformCount: number; // Lift Event only: number of physical platforms available for Olympic lift movements
+  rackHeightSettings: Record<string, Record<string, string>>; // Lift Event only: current physical height setting per movement -> rack/platform key (e.g. Squat -> { "Rack 1": "9" })
   maxParticipants: number;
   workoutTimerWorkSeconds: number;
   workoutTimerRestSeconds: number;
@@ -504,6 +506,7 @@ interface WaveStore {
     rackCount?: number,
     platformCount?: number
   ) => Promise<void>;
+  setRackHeightSetting: (movement: string, rackKey: string, height: string, eventId: string) => Promise<void>;
   setMaxParticipants: (maxParticipants: number, eventId: string) => Promise<void>;
   setWorkoutTimerConfig: (workSeconds: number, restSeconds: number, eventId: string) => Promise<void>;
   setEventConfig: (startDate: string, startTime: string, totalWaves: number, eventId: string) => Promise<void>;
@@ -596,6 +599,7 @@ export const useWaveStore = create<WaveStore>()(
       rackMovements: [],
       rackCount: 4,
       platformCount: 2,
+      rackHeightSettings: {},
       maxParticipants: 10,
       workoutTimerWorkSeconds: 60,
       workoutTimerRestSeconds: 30,
@@ -1013,6 +1017,30 @@ export const useWaveStore = create<WaveStore>()(
           }, { merge: true });
         } catch (error) {
           console.error('❌ Failed to save lift event config to Firebase:', error);
+        }
+      },
+
+      setRackHeightSetting: async (movement, rackKey, height, eventId) => {
+        const state = get();
+        const targetEventId = resolveTargetEventId(state, eventId);
+        const nextForMovement = { ...(state.rackHeightSettings[movement] || {}), [rackKey]: height };
+        const nextSettings = { ...state.rackHeightSettings, [movement]: nextForMovement };
+
+        if (targetEventId === state.activeEventId) {
+          set({ rackHeightSettings: nextSettings });
+        }
+
+        try {
+          const { db } = getFirebase();
+          const configRef = getEventConfigRef(db, targetEventId);
+          await setDoc(configRef, {
+            liftEvent: {
+              rackHeightSettings: nextSettings,
+            },
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        } catch (error) {
+          console.error('❌ Failed to save rack height setting to Firebase:', error);
         }
       },
       
@@ -1754,9 +1782,10 @@ export const useWaveStore = create<WaveStore>()(
                 rackMovements: normalizedRackMovements,
                 rackCount: Math.max(1, Math.round(Number(data.liftEvent.rackCount) || 4)),
                 platformCount: Math.max(1, Math.round(Number(data.liftEvent.platformCount) || 2)),
+                rackHeightSettings: data.liftEvent.rackHeightSettings || {},
               });
             } else {
-              set({ liftFlights: {}, olympicLiftMovements: [], olympicLiftsEnabled: false, rackMovements: [], rackCount: 4, platformCount: 2 });
+              set({ liftFlights: {}, olympicLiftMovements: [], olympicLiftsEnabled: false, rackMovements: [], rackCount: 4, platformCount: 2, rackHeightSettings: {} });
             }
             if (typeof data.eventNotes === 'string') {
               set({ eventNotes: data.eventNotes });

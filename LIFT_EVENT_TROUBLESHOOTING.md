@@ -137,3 +137,12 @@ For general, non-Lift-Event repo issues, use [TROUBLESHOOTING_LOG.md](TROUBLESHO
 **Still open:** rack height doesn't yet auto-suggest a rack based on matching height — it's just visible/editable data for staff to manually match when assigning.
 
 ---
+
+## 2026-09-23 — Rack-level height setting on the Performance page header
+
+**Related plan section:** "4. Live Rack Entry"
+**Symptom:** Rack height was only tracked per-lifter (what height they need). There was no way to record what height the physical rack is *currently* set to, which is what staff actually compare against when deciding assignment.
+**Fix:** Added a new `rackHeightSettings: Record<string, Record<string, string>>` store field (movement → rack/platform key → current height), persisted to `liftEvent.rackHeightSettings` in the event config doc via a new `setRackHeightSetting(movement, rackKey, height, eventId)` action (merge write, doesn't touch other `liftEvent` fields). Added a height dropdown (7–14) directly in each rack's "{Rack} — live view" header on the Performance page, shown only for rack movements — this is the physical rack's current setting, separate from each lifter's individual desired height shown on their card.
+**Files changed:** `src/store/waveStore.ts`, `src/components/LiftPerformanceBoard.tsx`
+
+---

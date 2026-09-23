@@ -32,6 +32,8 @@ export default function LiftPerformanceBoard() {
     rackMovements,
     rackCount,
     platformCount,
+    rackHeightSettings,
+    setRackHeightSetting,
     themeColors,
     updateParticipantData,
     saveWavePerformance,
@@ -338,7 +340,24 @@ export default function LiftPerformanceBoard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4">
-            <h4 className="text-sm font-semibold text-gray-900 mb-3">{rackKey} — live view</h4>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h4 className="text-sm font-semibold text-gray-900">{rackKey} — live view</h4>
+              {movementUsesRack && (
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                  Rack height
+                  <select
+                    value={rackHeightSettings[movement]?.[rackKey] || ''}
+                    onChange={(e) => void setRackHeightSetting(movement, rackKey, e.target.value, activeEventId)}
+                    className="h-7 rounded-md border border-gray-300 bg-white px-1.5 text-xs font-semibold text-gray-700"
+                  >
+                    <option value="">—</option>
+                    {RACK_HEIGHT_OPTIONS.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
             {assignedToSelectedRack.length === 0 ? (
               <p className="text-xs text-gray-500">No lifters assigned to {rackKey} yet.</p>
             ) : (
