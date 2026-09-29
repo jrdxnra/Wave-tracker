@@ -1,7 +1,7 @@
-// Google Apps Script webhook — ONE script bound to ONE Google Form + ONE Google Sheet per event.
+// Google Apps Script webhook — Lift Event template. ONE script bound to ONE Google Form + ONE Google Sheet per event.
 // Paste this file into Extensions > Apps Script in that Sheet.
 //
-// Reusing this for a new event (do this every time, do NOT create a second Form for the same event):
+// Reusing this for a new Lift Event (do this every time, do NOT create a second Form for the same event):
 //   1. Create exactly one Google Form for the event and link it to exactly one new Google Sheet.
 //   2. Update the 4 constants directly below to match that Form/Sheet.
 //   3. Re-run installOrRepairTriggers() from the Apps Script editor.
@@ -34,21 +34,29 @@ const DEBUG_LOGGING = false;
 // Time-driven trigger cadence. 5 minutes is the production default.
 const TIME_DRIVEN_TRIGGER_MINUTES = 5;
 
+// Header matchers written against the SVL GFit Games 2026 Flight Sign Up form wording.
+// Squat/bench openers both contain "please enter it here", so the deadlift opener matcher
+// excludes headers that mention squat/bench to stay unambiguous.
 const HEADER_MATCHERS = {
   timestamp: [/^timestamp$/],
-  email: [/^email address$/, /^email$/],
+  email: [/^email$/, /^email address$/],
   name: [/^name$/, /^full name$/],
-  first_pref: [/time slot availability:\s*first preference/],
-  first_flex: [/first preference flexibility/],
-  second_pref: [/time slot availability:\s*second preference/],
-  second_flex: [/second preference flexibility/],
-  swim_comfort: [/swim comfort/],
-  entry_mode: [/single.*buddy.*group/, /solo.*buddy.*group/, /^entry type$/, /^participation type$/],
-  group_name: [/racing with a buddy or group/],
-  first_tri: [/first triathlon/],
-  ping_group: [/super sprint ping group/, /ping group/, /opt in below/],
+  division: [/select division category/],
+  squat_first_pref: [/back squat time slot availability:\s*first preference/],
+  squat_second_pref: [/back squat time slot availability:\s*second preference/],
+  squat_opener_weight: [/first attempt weight for squat/],
+  squat_rack_height: [/rack height for back squat/],
+  bench_first_pref: [/bench press time slot availability:\s*first preference/],
+  bench_second_pref: [/bench press time slot availability:\s*second preference/],
+  bench_opener_weight: [/first attempt weight for bench/],
+  bench_rack_height: [/rack height for bench press/],
+  deadlift_first_pref: [/deadlift time slot availability:\s*first preference/],
+  deadlift_second_pref: [/deadlift time slot availability:\s*second preference/],
+  deadlift_opener_weight: [/^(?!.*squat)(?!.*bench).*first attempt weight/],
+  olympic_selection: [/olympic lifting time slot availability/],
   how_heard: [/how did you hear about this event/],
-  first_gfit: [/first gfit event/],
+  is_first_gfit_games: [/first gfit games/],
+  is_first_hp_event: [/first h\+p event/],
   volunteer_opt_in: [/would you like to volunteer at the event/],
   comments: [/comments, questions, or accessibility needs/],
   reg_status: [/^registration status$/],
@@ -56,9 +64,8 @@ const HEADER_MATCHERS = {
   chat_link: [/^wave chat space link$/],
   calendar_sent: [/^calendar invite sent\?$/],
   volunteer_role: [/^volunteer role assigned$/],
-  internal_notes: [/^internal notes$/]
-  ,portal_url: [/^portal url$/, /^participant portal url$/, /portal url/]
-  ,include_in_leaderboard: [/include in leaderboard/, /included on the leaderboard/, /show on leaderboard/, /leaderboard opt/]
+  internal_notes: [/^internal notes$/],
+  portal_url: [/^portal url$/, /^participant portal url$/, /portal url/]
 };
 
 function normalizeHeader(value) {
@@ -92,8 +99,8 @@ function getCell(values, colMap, key) {
 }
 
 function isAllowedResponseSheet(name) {
-  // Exact match only — a loose "contains 'form responses'" fallback here would let a
-  // second, accidentally-created Form's tab (e.g. "Form Responses 2") get treated as valid.
+  // Exact match only — a loose fallback here would let a second, accidentally-created
+  // Form's tab (e.g. "Form Responses 2") get treated as valid.
   return RESPONSE_SHEET_NAMES.includes(name);
 }
 
@@ -121,7 +128,6 @@ function onFormSubmitTrigger(e) {
 
     debugLog("onFormSubmitTrigger: firing", { row });
 
-    // Ensure new rows default to Pending if Registration Status column exists.
     if (colMap.reg_status) {
       const statusCell = sheet.getRange(row, colMap.reg_status);
       if (!statusCell.getValue()) {
@@ -162,13 +168,10 @@ function onEditTrigger(e) {
     const endCol = startCol + range.getNumColumns() - 1;
     if (endRow <= 1) return;
 
-    // Fire webhook only for internal management columns that exist on this sheet.
     const watchedCols = [
       colMap.reg_status,
       colMap.confirmed_wave,
       colMap.chat_link,
-      colMap.ping_group,
-      colMap.include_in_leaderboard,
       colMap.volunteer_role,
       colMap.internal_notes
     ].filter(Boolean);
@@ -258,9 +261,6 @@ function installOrRepairTriggers() {
   logInstalledTriggers();
 }
 
-/**
- * Logs all installed project triggers for quick verification.
- */
 function logInstalledTriggers() {
   const triggers = ScriptApp.getProjectTriggers();
   const summary = triggers.map(function (trigger) {
@@ -303,7 +303,6 @@ function syncNewRegistrationsFromSheet() {
   for (let row = start; row <= sheetLastRow; row += 1) {
     const nameValue = safeString(sheet.getRange(row, colMap.name || 1).getValue());
     if (!nameValue) continue;
-    // Use form_submit mode so time-driven catch-up auto-allocates missed rows.
     sendPayload(sheet, row, colMap, 'form_submit');
     processed += 1;
   }
@@ -317,37 +316,42 @@ function syncNewRegistrationsFromSheet() {
   });
 }
 
+// True unless the lifter's Olympic answer is empty or only "Not entering this event".
+function deriveOlympicOptIn(rawValue) {
+  const options = tokenizeMultiSelect(rawValue);
+  return options.some(function (option) { return !/not entering/.test(option); });
+}
+
 function sendPayload(sheet, row, colMap, triggerSource) {
   const values = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
   const nameValue = safeString(getCell(values, colMap, 'name'));
-
-  const parsedEntry = splitEntryModeAndGroupName(
-    getCell(values, colMap, 'entry_mode'),
-    getCell(values, colMap, 'group_name')
-  );
-  const optIns = parseCommunityOptIns(
-    getCell(values, colMap, 'ping_group'),
-    colMap.include_in_leaderboard ? getCell(values, colMap, 'include_in_leaderboard') : null
-  );
+  const olympicSelectionRaw = safeString(getCell(values, colMap, 'olympic_selection'));
 
   const payload = {
     event_id: APP_EVENT_ID,
+    registration_template: 'lift-event',
     source_sheet: sheet.getName(),
     trigger_source: triggerSource,
     row_number: row,
     timestamp: toIsoDate(getCell(values, colMap, 'timestamp')),
     name: nameValue,
-    first_preference_hour: safeString(getCell(values, colMap, 'first_pref')),
-    first_preference_flexibility: safeString(getCell(values, colMap, 'first_flex')),
-    second_preference_hour: safeString(getCell(values, colMap, 'second_pref')),
-    second_preference_flexibility: safeString(getCell(values, colMap, 'second_flex')),
-    swim_comfort: safeString(getCell(values, colMap, 'swim_comfort')),
-    entry_mode: parsedEntry.entry_mode,
-    group_name: parsedEntry.group_name,
-    is_first_tri: toBoolean(getCell(values, colMap, 'first_tri')),
-    ping_group_opt_in: optIns.pingGroupOptIn,
+    division: safeString(getCell(values, colMap, 'division')),
+    squat_first_preference: safeString(getCell(values, colMap, 'squat_first_pref')),
+    squat_second_preference: safeString(getCell(values, colMap, 'squat_second_pref')),
+    squat_opener_weight: safeString(getCell(values, colMap, 'squat_opener_weight')),
+    squat_rack_height: safeString(getCell(values, colMap, 'squat_rack_height')),
+    bench_first_preference: safeString(getCell(values, colMap, 'bench_first_pref')),
+    bench_second_preference: safeString(getCell(values, colMap, 'bench_second_pref')),
+    bench_opener_weight: safeString(getCell(values, colMap, 'bench_opener_weight')),
+    bench_rack_height: safeString(getCell(values, colMap, 'bench_rack_height')),
+    deadlift_first_preference: safeString(getCell(values, colMap, 'deadlift_first_pref')),
+    deadlift_second_preference: safeString(getCell(values, colMap, 'deadlift_second_pref')),
+    deadlift_opener_weight: safeString(getCell(values, colMap, 'deadlift_opener_weight')),
+    olympic_lifting_selection: olympicSelectionRaw,
+    olympic_lifts_opt_in: deriveOlympicOptIn(olympicSelectionRaw),
     how_heard: safeString(getCell(values, colMap, 'how_heard')),
-    is_first_gfit: toBoolean(getCell(values, colMap, 'first_gfit')),
+    is_first_gfit_games: toBoolean(getCell(values, colMap, 'is_first_gfit_games')),
+    is_first_hp_event: toBoolean(getCell(values, colMap, 'is_first_hp_event')),
     volunteer_opt_in: toBoolean(getCell(values, colMap, 'volunteer_opt_in')),
     comments: safeString(getCell(values, colMap, 'comments')),
     // Preserve existing app status/wave during replay when management columns are absent.
@@ -359,18 +363,15 @@ function sendPayload(sheet, row, colMap, triggerSource) {
       : null,
     chat_link: safeString(getCell(values, colMap, 'chat_link')),
     calendar_invite_sent: toBoolean(getCell(values, colMap, 'calendar_sent')),
-    include_in_leaderboard: optIns.includeInLeaderboard,
     volunteer_role: safeString(getCell(values, colMap, 'volunteer_role')),
     internal_notes: safeString(getCell(values, colMap, 'internal_notes')),
     portal_url: safeString(getCell(values, colMap, 'portal_url'))
   };
 
-
   debugLog("sendPayload: posting webhook", {
     row,
     triggerSource,
-    registration_status: payload.registration_status,
-    confirmed_wave_time: payload.confirmed_wave_time
+    registration_status: payload.registration_status
   });
 
   const headers = { Accept: "application/json" };
@@ -388,51 +389,6 @@ function sendPayload(sheet, row, colMap, triggerSource) {
 
   const response = UrlFetchApp.fetch(APP_BACKEND_URL, options);
   const responseCode = response.getResponseCode();
-  let responseData = null;
-
-  if (responseCode === 200) {
-    try {
-      responseData = JSON.parse(response.getContentText());
-    } catch (err) {
-      Logger.log("Webhook response parse warning: " + err);
-    }
-  }
-
-  // Auto-write backend allocation result into the sheet for fully hands-free registrations.
-  if (
-    triggerSource === "form_submit" &&
-    responseCode === 200 &&
-    responseData &&
-    responseData.status === "success" &&
-    responseData.mode === "auto_allocation"
-  ) {
-    if (colMap.reg_status && responseData.registration_status) {
-      sheet.getRange(row, colMap.reg_status).setValue(responseData.registration_status);
-    }
-
-    if (colMap.confirmed_wave) {
-      if (responseData.assigned_wave) {
-        sheet.getRange(row, colMap.confirmed_wave).setValue(responseData.assigned_wave);
-      } else {
-        sheet.getRange(row, colMap.confirmed_wave).clearContent();
-      }
-    }
-
-    if (colMap.portal_url) {
-      if (responseData.portal_url) {
-        sheet.getRange(row, colMap.portal_url).setValue(responseData.portal_url);
-      } else {
-        sheet.getRange(row, colMap.portal_url).clearContent();
-      }
-    }
-
-    debugLog("sendPayload: auto-writeback applied", {
-      row,
-      registration_status: responseData.registration_status || null,
-      assigned_wave: responseData.assigned_wave || null,
-      portal_url: responseData.portal_url || null
-    });
-  }
 
   Logger.log(
     "Webhook POST row " +
@@ -463,45 +419,6 @@ function toBoolean(value) {
   return v === "yes" || v === "true" || v === "y" || v === "1";
 }
 
-function parseCommunityOptIns(rawPingGroupValue, rawLeaderboardValue) {
-  const pingRaw = safeString(rawPingGroupValue);
-  const options = tokenizeMultiSelect(rawPingGroupValue);
-  const hasChatOption = options.some(function (option) {
-    return /chat|ping group|group chat|updates|photos|coach/.test(option);
-  });
-  const hasLeaderboardOption = options.some(function (option) {
-    return /leaderboard|results|rankings?/.test(option);
-  });
-
-  // Use explicit leaderboard field only when combined opt-in answer is empty.
-  const leaderboardRaw = safeString(rawLeaderboardValue);
-  const explicitLeaderboard = leaderboardRaw
-    ? toBoolean(rawLeaderboardValue)
-    : null;
-
-  if (!pingRaw && explicitLeaderboard === null) {
-    return {
-      pingGroupOptIn: false,
-      includeInLeaderboard: false
-    };
-  }
-
-  const hasMultiSelectSignal = options.length > 0;
-  const hasCombinedAnswer = pingRaw.length > 0;
-
-  const pingGroupOptIn = hasChatOption || (!hasMultiSelectSignal && toBoolean(rawPingGroupValue));
-  const includeInLeaderboard = hasCombinedAnswer
-    ? hasLeaderboardOption
-    : (explicitLeaderboard !== null
-      ? explicitLeaderboard
-      : (!hasMultiSelectSignal && toBoolean(rawPingGroupValue)));
-
-  return {
-    pingGroupOptIn: pingGroupOptIn,
-    includeInLeaderboard: includeInLeaderboard
-  };
-}
-
 function tokenizeMultiSelect(value) {
   if (value === null || value === undefined) return [];
   if (Array.isArray(value)) {
@@ -527,47 +444,6 @@ function toIsoDate(value) {
   if (value instanceof Date) return value.toISOString();
   const v = safeString(value);
   return v || null;
-}
-
-function splitEntryModeAndGroupName(rawEntryMode, rawGroupField) {
-  const explicitMode = safeString(rawEntryMode);
-  const groupField = safeString(rawGroupField);
-
-  if (explicitMode) {
-    return {
-      entry_mode: explicitMode,
-      group_name: groupField
-    };
-  }
-
-  if (!groupField) {
-    return {
-      entry_mode: '',
-      group_name: ''
-    };
-  }
-
-  // Supports checkbox+Other style values like "Group, Friend Name".
-  const parts = groupField.split(',').map(function (p) { return safeString(p); }).filter(Boolean);
-  if (parts.length === 0) {
-    return {
-      entry_mode: '',
-      group_name: ''
-    };
-  }
-
-  const first = parts[0].toLowerCase();
-  if (first === 'single' || first === 'solo' || first === 'buddy' || first === 'group') {
-    return {
-      entry_mode: parts[0],
-      group_name: parts.slice(1).join(', ')
-    };
-  }
-
-  return {
-    entry_mode: '',
-    group_name: groupField
-  };
 }
 
 function formatTime(value) {
@@ -599,13 +475,7 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = null;
-    for (var s = 0; s < RESPONSE_SHEET_NAMES.length; s++) {
-      sheet = spreadsheet.getSheetByName(RESPONSE_SHEET_NAMES[s]);
-      if (sheet) break;
-    }
-
+    const sheet = getResponseSheet();
     if (!sheet) {
       return ContentService
         .createTextOutput(JSON.stringify({ ok: false, error: 'response_sheet_not_found' }))
@@ -628,7 +498,7 @@ function doPost(e) {
       sheet.getRange(row, colMap.confirmed_wave).clearContent();
     }
 
-     debugLog('doPost: cancellation write-back applied', { row });
+    debugLog('doPost: cancellation write-back applied', { row });
 
     return ContentService
       .createTextOutput(JSON.stringify({ ok: true, row }))
@@ -718,24 +588,18 @@ function syncCancelledRegistrationsFromApp() {
     ackIds.push(item.id);
   }
 
-  if (ackIds.length === 0) {
-    return;
-  }
+  if (ackIds.length === 0) return;
 
-  const ackRes = UrlFetchApp.fetch(getBackendBaseUrl() + '/api/register/cancellation-feed', {
+  const ackUrl = getBackendBaseUrl() + '/api/register/cancellation-feed';
+  const ackRes = UrlFetchApp.fetch(ackUrl, {
     method: 'post',
     contentType: 'application/json',
-    payload: JSON.stringify({
-      event_id: APP_EVENT_ID,
-      secret: PULL_SYNC_SECRET,
-      ack_ids: ackIds
-    }),
     muteHttpExceptions: true,
-    headers: { Accept: 'application/json' }
+    payload: JSON.stringify({ event_id: APP_EVENT_ID, secret: PULL_SYNC_SECRET, ack_ids: ackIds })
   });
 
-  debugLog('syncCancelledRegistrationsFromApp: processed', {
-    updatedRows: ackIds.length,
-    ackStatus: ackRes.getResponseCode()
+  debugLog('syncCancelledRegistrationsFromApp: acked', {
+    count: ackIds.length,
+    responseCode: ackRes.getResponseCode()
   });
 }

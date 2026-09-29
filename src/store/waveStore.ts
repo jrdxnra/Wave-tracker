@@ -415,6 +415,7 @@ interface FirebaseWaveData {
   name?: string;
   startTime?: string;
   coach?: string;
+  isOlympicFlight?: boolean;
 }
 
 type MovementTimingMode = 'global' | 'individual' | 'lift';
@@ -480,7 +481,7 @@ interface WaveStore {
   setCurrentWave: (waveId: string) => void;
   updateWave: (waveId: string, updates: Partial<Wave>) => void;
 
-  addParticipant: (waveId: string, name: string) => Promise<void>;
+  addParticipant: (waveId: string, name: string, options?: { olympicOnly?: boolean; olympicSessionStart?: string }) => Promise<void>;
   deleteParticipant: (waveId: string, participantId: string) => Promise<void>;
   updateParticipantData: (waveId: string, participantId: string, field: string, value: string) => void;
   updateParticipantName: (waveId: string, participantId: string, name: string) => void;
@@ -692,6 +693,7 @@ export const useWaveStore = create<WaveStore>()(
             name: updatedWave.name,
             startTime: updatedWave.startTime,
             coach: updatedWave.coach || '',
+            isOlympicFlight: updatedWave.isOlympicFlight === true,
             updatedAt: serverTimestamp(),
           }, { merge: true });
         } catch (error) {
@@ -699,13 +701,22 @@ export const useWaveStore = create<WaveStore>()(
         }
       },
 
-      addParticipant: async (waveId, name) => {
+      addParticipant: async (waveId, name, options) => {
         const wave = get().waves[waveId];
         if (!wave) return;
         
         // Check if adding this participant would exceed the limit
-        const { maxParticipants } = get();
-        if (wave.participants.length >= maxParticipants) {
+        const { maxParticipants, movementTimingMode, olympicLiftMovements } = get();
+        const powerCount = wave.participants.filter((participant) =>
+          participant.powerliftingEntry === true || (
+            participant.powerliftingEntry !== false && (
+              (!participant.olympicLiftsOptIn && !participant.olympicSessionStart)
+              || Object.keys(participant.liftMovementFlights || {})
+                .some((movement) => !olympicLiftMovements.includes(movement) && participant.liftMovementFlights?.[movement])
+            )
+          )
+        ).length;
+        if (!(movementTimingMode === 'lift' && options?.olympicOnly) && (movementTimingMode === 'lift' ? powerCount : wave.participants.length) >= maxParticipants) {
           alert(`Cannot add more participants. Maximum limit is ${maxParticipants} per wave.`);
           return;
         }
@@ -716,7 +727,9 @@ export const useWaveStore = create<WaveStore>()(
           waveData: createInitialWaveData(get().customEvents),
           includeInLeaderboard: true, // Default to checked - must opt out
           pingGroupOptIn: false,
-          olympicLiftsOptIn: false,
+          olympicLiftsOptIn: movementTimingMode === 'lift' && options?.olympicOnly === true,
+          ...(movementTimingMode === 'lift' ? { powerliftingEntry: options?.olympicOnly !== true } : {}),
+          ...(options?.olympicSessionStart ? { olympicSessionStart: options.olympicSessionStart } : {}),
           bodyWeight: '',
         };
         
@@ -753,6 +766,8 @@ export const useWaveStore = create<WaveStore>()(
             includeInLeaderboard: participant.includeInLeaderboard,
             pingGroupOptIn: participant.pingGroupOptIn === true,
             olympicLiftsOptIn: participant.olympicLiftsOptIn === true,
+            ...(movementTimingMode === 'lift' ? { powerliftingEntry: participant.powerliftingEntry } : {}),
+            ...(participant.olympicSessionStart ? { olympicSessionStart: participant.olympicSessionStart } : {}),
             bodyWeight: participant.bodyWeight || '',
             updatedAt: serverTimestamp(),
           }, { merge: true });
@@ -1017,6 +1032,7 @@ export const useWaveStore = create<WaveStore>()(
           }, { merge: true });
         } catch (error) {
           console.error('❌ Failed to save lift event config to Firebase:', error);
+          throw error;
         }
       },
 
@@ -1946,6 +1962,7 @@ export const useWaveStore = create<WaveStore>()(
                   name: w.name || waveDoc.id,
                   startTime: w.startTime || '',
                   coach: w.coach || '',
+                  isOlympicFlight: w.isOlympicFlight === true,
                   participants,
                 } as Wave,
               ] as const;
@@ -2413,8 +2430,6 @@ export const useWaveStore = create<WaveStore>()(
             updatedAt: new Date().toISOString(),
           }, { merge: true });
         }
-
-        await get().syncWithFirebase();
       },
 
       // Mark user as active (for smart sync optimization)
@@ -2463,6 +2478,10 @@ export const useWaveStore = create<WaveStore>()(
         liftFlights: s.liftFlights,
         olympicLiftMovements: s.olympicLiftMovements,
         olympicLiftsEnabled: s.olympicLiftsEnabled,
+        rackMovements: s.rackMovements,
+        rackCount: s.rackCount,
+        platformCount: s.platformCount,
+        rackHeightSettings: s.rackHeightSettings,
       }),
       onRehydrateStorage: () => (state) => {
         // Ensure all required fields have default values (will be overwritten by Firebase load)

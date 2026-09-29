@@ -146,3 +146,25 @@ For general, non-Lift-Event repo issues, use [TROUBLESHOOTING_LOG.md](TROUBLESHO
 **Files changed:** `src/store/waveStore.ts`, `src/components/LiftPerformanceBoard.tsx`
 
 ---
+
+## 2026-09-28 — Rack height row intermittently missing in Flight tab participant details
+
+**Related plan section:** "3. Check-in", "4. Live Rack Entry"
+**Symptom:** In the Flight tab detail panel ("Flight per Movement"), the Squat/Bench Rack/Height row sometimes disappears entirely (Flight / 1st Attempt / PR still show), then comes back later.
+**Root cause (confirmed in code):** The Rack row is gated on `rackMovements.includes(event)`. The store's `persist` `partialize` cached `liftFlights`/`olympicLiftMovements` plus `isDataLoaded`/`lastFirebaseSync` to sessionStorage, but **not** `rackMovements`, `rackCount`, `platformCount`, or `rackHeightSettings`. On a full page reload within 30s of the last sync, `loadAll` hits its freshness TTL and skips `loadGlobalConfig`, so those fields stay at defaults (`rackMovements: []`) → Rack row hidden, lifter `H{height}` badge hidden on Performance, rack counts reset to 4/2. After 30s (or opening Configuration, which calls `loadGlobalConfig`) it reappears — hence "intermittent".
+**Fix:** Added `rackMovements`, `rackCount`, `platformCount`, `rackHeightSettings` to `partialize` so they rehydrate alongside the other lift config.
+**Files changed:** `src/store/waveStore.ts`
+
+**Still to verify separately:** when the row is visible it can show the "Height" placeholder for a lifter who entered a height at registration. The select only has options `7`–`14`, and registration heights map only from `squatRackHeight`/`benchRackHeight` to movements named exactly `Squat`/`Bench`. A value outside that list (e.g. `"9 holes"`) won't display. Needs a check of the raw registration values.
+
+---
+
+## 2026-09-28 — Bodyweight typed in Flight tab details not sticking
+
+**Related plan section:** "3. Check-in"
+**Symptom:** Bodyweight entered in the Flight tab participant detail panel is lost, while PR / flight / rack height entered the same way persist.
+**Root cause (confirmed in code):** `handleLiftParticipantFieldChange` in `LiftFlightBoard` wrote updates to Firestore (participant + registration docs) and to local component state, but never to the participant object in the wave store. Store-level saves — notably `saveWavePerformance` (fired on blur of any 1st Attempt input in the same flight), `addParticipant`, `setCustomEvents`, `saveAll` — write `bodyWeight: participant.bodyWeight || ''` and `olympicLiftsOptIn` from the stale store copy with `merge: true`, blanking the value just saved. PR/flight/rack-height fields aren't included in those store writes, so they survived.
+**Fix:** `handleLiftParticipantFieldChange` now also patches the matching participant in `useWaveStore` so later store saves write the current value.
+**Files changed:** `src/components/LiftFlightBoard.tsx`
+
+---

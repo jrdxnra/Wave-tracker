@@ -52,7 +52,7 @@ interface ParticipantMeta {
 }
 
 export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
-  const { deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, themeColors, activeEventId, movementTimingMode, liftFlights, olympicLiftMovements, olympicLiftsEnabled, customEvents, updateParticipantData, saveWavePerformance, loadAll } = useWaveStore();
+  const { deleteWave, addParticipant, deleteParticipant, maxParticipants, updateWave, themeColors, activeEventId, movementTimingMode, liftFlights, olympicLiftMovements, olympicLiftsEnabled, customEvents, updateParticipantData, saveWavePerformance } = useWaveStore();
   const isLiftTemplate = movementTimingMode === 'lift' || Object.keys(liftFlights || {}).length > 0 || olympicLiftMovements.length > 0 || !!olympicLiftsEnabled;
   const scopeLabel = isLiftTemplate ? 'Flight' : 'Wave';
   const accent = themeColors.accent;
@@ -260,7 +260,6 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
         }, { merge: true });
       }
 
-      await loadAll({ preserveActiveEvent: true, force: true });
     } catch (error) {
       console.error('Failed to update lift participant field:', error);
       alert('Failed to update participant lift details. Please try again.');
@@ -409,7 +408,6 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
           <div className="space-y-2 overflow-y-auto max-h-[36rem]">
             {wave.participants.map((participant, index) => {
               const meta = participantMeta[participant.id];
-              const bodyWeight = meta?.bodyWeight ?? participant.bodyWeight ?? '';
               const olympicLiftsOptIn = meta?.olympicLiftsOptIn ?? participant.olympicLiftsOptIn === true;
 
               return (
@@ -424,11 +422,6 @@ export default function WaveQuickViewCard({ wave }: WaveQuickViewCardProps) {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {bodyWeight && (
-                      <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
-                        BW {bodyWeight}
-                      </span>
-                    )}
                     <label className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${olympicLiftsOptIn ? 'border-amber-200 bg-amber-100 text-amber-800' : 'border-slate-200 bg-white text-gray-600'}`}>
                       <input
                         type="checkbox"

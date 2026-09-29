@@ -9,14 +9,24 @@ import {
   orderBy,
   query,
   setDoc,
-  where,
   type Firestore,
 } from 'firebase/firestore';
 import { getFirebase } from '@/lib/firebase';
+import { isWebhookRegistrationRow } from '@/lib/registrationSource';
 import { useWaveStore } from '@/store/waveStore';
+import { findUnmatchedLiftPreferences } from '@/lib/liftFlightAlignment';
 
 type RegistrationStatus = 'Pending' | 'Confirmed' | 'Waitlisted' | 'Needs Reassignment' | 'Cancelled';
 type ManageAction = 'auto_allocate' | 'manual_override' | 'waitlist' | 'cancel';
+const FLIGHT_DISPLAY_ORDER = ['Squat', 'Bench', 'Deadlift', 'Snatch', 'Clean & Jerk'];
+
+function compareFlightMovements(first: string, second: string): number {
+  const firstRank = FLIGHT_DISPLAY_ORDER.indexOf(first);
+  const secondRank = FLIGHT_DISPLAY_ORDER.indexOf(second);
+  return (firstRank < 0 ? 999 : firstRank) - (secondRank < 0 ? 999 : secondRank);
+}
+
+const getAttemptField = (movement: string, attempt: number) => `${movement}__attempt_${attempt}`;
 
 interface PendingSyncState {
   targetStatus: RegistrationStatus;
@@ -40,11 +50,48 @@ interface RegistrationRow {
   groupName: string;
   source: string;
   sourceSheet: string;
+  sourceWaitlistId: string;
   triggerSource: string;
   pingGroupOptIn: boolean;
   includeInLeaderboard: boolean;
   olympicLiftsOptIn: boolean;
   updatedAt: string;
+  // Lift Event only: raw registration answers, reviewed/assigned manually by staff.
+  registrationTemplate: string;
+  division: string;
+  genderCategory: string;
+  bodyWeight: string;
+  liftMovementPrs: Record<string, string>;
+  squatFirstPreference: string;
+  squatSecondPreference: string;
+  squatOpenerWeight: string;
+  benchFirstPreference: string;
+  benchSecondPreference: string;
+  benchOpenerWeight: string;
+  deadliftFirstPreference: string;
+  deadliftSecondPreference: string;
+  deadliftOpenerWeight: string;
+  olympicLiftingSelection: string;
+  liftMovementFlights: Record<string, string>;
+}
+
+function getLiftPreferenceRows(row: RegistrationRow): Array<{ movement: string; preference: string; flight: string }> {
+  const olympicAnswers = row.olympicLiftingSelection.split(/[,;\n]+/).map((answer) => answer.trim());
+  const olympicPreference = (movement: 'Snatch' | 'Clean & Jerk') => olympicAnswers
+    .filter((answer) => movement === 'Snatch' ? /snatch/i.test(answer) : /clean\s*(?:&|and)\s*jerk/i.test(answer))
+    .map((answer) => answer.match(/\d{1,2}:\d{2}\s*[AP]M\s*-\s*\d{1,2}:\d{2}\s*[AP]M/i)?.[0] || answer)
+    .join(' / ');
+  const preferences: Record<string, string> = {
+    Squat: [row.squatFirstPreference, row.squatSecondPreference].filter(Boolean).join(' / '),
+    Bench: [row.benchFirstPreference, row.benchSecondPreference].filter(Boolean).join(' / '),
+    Deadlift: [row.deadliftFirstPreference, row.deadliftSecondPreference].filter(Boolean).join(' / '),
+    Snatch: olympicPreference('Snatch'),
+    'Clean & Jerk': olympicPreference('Clean & Jerk'),
+  };
+  const movements = [...FLIGHT_DISPLAY_ORDER, ...Object.keys(row.liftMovementFlights).filter((movement) => !FLIGHT_DISPLAY_ORDER.includes(movement))];
+  return movements
+    .filter((movement) => preferences[movement] || row.liftMovementFlights[movement])
+    .map((movement) => ({ movement, preference: preferences[movement] || '-', flight: row.liftMovementFlights[movement] || '-' }));
 }
 
 interface RegistrationsTabProps {
@@ -188,19 +235,6 @@ function normalizeParticipantName(value: string): string {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function isWebhookRegistrationRow(row: RegistrationRow): boolean {
-  const source = String(row.source || '').trim().toLowerCase();
-  const trigger = String(row.triggerSource || '').trim().toLowerCase();
-  const hasSourceSheet = String(row.sourceSheet || '').trim().length > 0;
-  const hasRowId = /^row-\d+$/i.test(String(row.id || '').trim());
-
-  if (hasSourceSheet) return true;
-  if (source === 'google-form-webhook') return true;
-  if (trigger === 'form_submit' || trigger === 'time_driven_sync' || trigger === 'bulk_backfill') return true;
-  if (hasRowId) return true;
-  return false;
-}
-
 function waveIdFromTime(label: string): string {
   return `wave-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 }
@@ -295,16 +329,18 @@ function buildWaveTimes(startTime: string, totalWaves: number, intervalMinutes: 
 
 export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime }: RegistrationsTabProps) {
   const wavesById = useWaveStore((state) => state.waves);
+  const isLiftEvent = useWaveStore((state) => state.movementTimingMode === 'lift');
   const olympicLiftMovements = useWaveStore((state) => state.olympicLiftMovements);
+  const liftFlights = useWaveStore((state) => state.liftFlights);
+  const updateParticipantData = useWaveStore((state) => state.updateParticipantData);
+  const saveWavePerformance = useWaveStore((state) => state.saveWavePerformance);
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollTopRef = useRef<number | null>(null);
   const [registrations, setRegistrations] = useState<RegistrationRow[]>([]);
-  const [pendingCancellationCount, setPendingCancellationCount] = useState(0);
+  const [selectedRegistrationId, setSelectedRegistrationId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | RegistrationStatus>('All');
-  const [swimFilter, setSwimFilter] = useState<'All' | 'N' | 'I' | 'A'>('All');
-  const [firstTriFilter, setFirstTriFilter] = useState<'All' | 'Yes' | 'No'>('All');
-  const [entryModeFilter, setEntryModeFilter] = useState<'All' | 'S' | 'B' | 'G'>('All');
+  const [fieldFilters, setFieldFilters] = useState<Record<string, string>>({});
   const [manualWaveSelection, setManualWaveSelection] = useState<Record<string, string>>({});
   const [rowBusyAction, setRowBusyAction] = useState<Record<string, string>>({});
   const [pendingSyncByRow, setPendingSyncByRow] = useState<Record<string, PendingSyncState>>({});
@@ -314,6 +350,11 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    setSearch('');
+    setStatusFilter('All');
+    setFieldFilters({});
+    setRegistrations([]);
+    setSelectedRegistrationId(null);
     let db: Firestore;
     try {
       db = getFirestore(getFirebase().app);
@@ -330,18 +371,7 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
     const regsRef = collection(db, 'events', eventId, 'registrations');
     const regsQuery = query(regsRef, orderBy('updatedAt', 'desc'));
 
-    const queueRef = collection(db, 'events', eventId, 'cancellationQueue');
-    const queueQuery = query(queueRef, where('status', '==', 'pending'));
     const configRef = doc(db, 'events', eventId, 'config', 'global');
-
-    let haveRegs = false;
-    let haveQueue = false;
-
-    const markLoadedIfReady = () => {
-      if (haveRegs && haveQueue) {
-        setIsLoading(false);
-      }
-    };
 
     const unsubRegs = onSnapshot(
       regsQuery,
@@ -366,11 +396,28 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
             groupName: data.groupName || '',
             source: data.source || '',
             sourceSheet: data.sourceSheet || '',
+            sourceWaitlistId: data.sourceWaitlistId || '',
             triggerSource: data.triggerSource || '',
             pingGroupOptIn: !!data.pingGroupOptIn,
             includeInLeaderboard: data.includeInLeaderboard !== false,
             olympicLiftsOptIn: data.olympicLiftsOptIn === true,
             updatedAt: data.updatedAt || '',
+            registrationTemplate: data.registrationTemplate || '',
+            division: data.division || '',
+            genderCategory: data.genderCategory || data.division || '',
+            bodyWeight: data.bodyWeight || '',
+            liftMovementPrs: data.liftMovementPrs || {},
+            squatFirstPreference: data.squatFirstPreference || '',
+            squatSecondPreference: data.squatSecondPreference || '',
+            squatOpenerWeight: data.squatOpenerWeight || '',
+            benchFirstPreference: data.benchFirstPreference || '',
+            benchSecondPreference: data.benchSecondPreference || '',
+            benchOpenerWeight: data.benchOpenerWeight || '',
+            deadliftFirstPreference: data.deadliftFirstPreference || '',
+            deadliftSecondPreference: data.deadliftSecondPreference || '',
+            deadliftOpenerWeight: data.deadliftOpenerWeight || '',
+            olympicLiftingSelection: data.olympicLiftingSelection || '',
+            liftMovementFlights: data.liftMovementFlights || {},
           } as RegistrationRow;
         });
 
@@ -389,24 +436,10 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
 
           return [...existingRows, ...newRows];
         });
-        haveRegs = true;
-        markLoadedIfReady();
+        setIsLoading(false);
       },
       (error) => {
         setErrorMessage(error.message || 'Failed to read registrations.');
-        setIsLoading(false);
-      }
-    );
-
-    const unsubQueue = onSnapshot(
-      queueQuery,
-      (snapshot) => {
-        setPendingCancellationCount(snapshot.size);
-        haveQueue = true;
-        markLoadedIfReady();
-      },
-      (error) => {
-        setErrorMessage(error.message || 'Failed to read cancellation queue.');
         setIsLoading(false);
       }
     );
@@ -447,7 +480,6 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
 
     return () => {
       unsubRegs();
-      unsubQueue();
       unsubConfig();
     };
   }, [eventId]);
@@ -464,28 +496,47 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
       return isWebhookRegistrationRow(row);
     });
   }, [registrations]);
+  const selectedRegistration = sheetRows.find((row) => row.id === selectedRegistrationId);
+  const selectedLiftPreferences = selectedRegistration ? getLiftPreferenceRows(selectedRegistration) : [];
+  const selectedFlightParticipant = Object.values(wavesById).flatMap((wave) =>
+    wave.participants.map((participant) => ({ waveId: wave.id, participant }))
+  ).find(({ participant }) => participant.id === selectedRegistrationId);
+
+  const availableFilters = useMemo(() => {
+    const definitions: Array<{ key: string; label: string; values: (row: RegistrationRow) => string[] }> = [
+      { key: 'division', label: 'Division', values: (row) => row.division ? [row.division] : [] },
+      { key: 'swim', label: 'Swim Level', values: (row) => row.swimComfort ? [getSwimComfortLabel(row.swimComfort)] : [] },
+      { key: 'entry', label: 'Entry Type', values: (row) => row.entryMode || row.groupName ? [getEntryModeLabel(row.entryMode, row.groupName)] : [] },
+      { key: 'flight', label: 'Assigned Flight', values: (row) => Object.entries(row.liftMovementFlights)
+        .filter(([, flight]) => Boolean(flight))
+        .map(([movement, flight]) => `${movement} · ${flight}`) },
+      { key: 'time', label: 'Assigned Time', values: (row) => row.confirmedWaveTime ? [row.confirmedWaveTime] : [] },
+    ];
+    if (sheetRows.some((row) => row.swimComfort || row.isFirstTri)) {
+      definitions.push({ key: 'tri', label: 'First Triathlon', values: (row) => [row.isFirstTri ? 'Yes' : 'No'] });
+    }
+
+    return definitions.map((definition) => ({
+      ...definition,
+      options: Array.from(new Set(sheetRows.flatMap(definition.values))).sort((first, second) =>
+        first.localeCompare(second, undefined, { numeric: true })
+      ),
+    })).filter((definition) => definition.options.length > 0);
+  }, [sheetRows]);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
 
     return sheetRows.filter((row) => {
       if (statusFilter !== 'All' && row.registrationStatus !== statusFilter) return false;
-
-      const swimCode = getSwimComfortCode(row.swimComfort);
-      if (swimFilter !== 'All' && swimCode !== swimFilter) return false;
-
-      if (firstTriFilter === 'Yes' && !row.isFirstTri) return false;
-      if (firstTriFilter === 'No' && row.isFirstTri) return false;
-
-      const entryCode = getEntryModeCode(row.entryMode, row.groupName);
-      if (entryModeFilter !== 'All' && entryCode !== entryModeFilter) return false;
+      if (availableFilters.some((filter) => fieldFilters[filter.key] && !filter.values(row).includes(fieldFilters[filter.key]))) return false;
 
       if (!needle) return true;
 
       const haystack = `${row.name}`.toLowerCase();
       return haystack.includes(needle);
     });
-  }, [sheetRows, search, statusFilter, swimFilter, firstTriFilter, entryModeFilter]);
+  }, [sheetRows, search, statusFilter, availableFilters, fieldFilters]);
 
   const availableWaveTimes = useMemo(() => {
     const hasPersistedWaves = Object.keys(wavesById).length > 0;
@@ -515,9 +566,6 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
     });
   }, [wavesById, configuredWaveTimes]);
 
-  const confirmedCount = sheetRows.filter((row) => row.registrationStatus === 'Confirmed').length;
-  const waitlistedCount = sheetRows.filter((row) => row.registrationStatus === 'Waitlisted').length;
-
   const duplicateNameSet = useMemo(() => {
     const counts = new Map<string, number>();
     for (const row of sheetRows) {
@@ -539,6 +587,7 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
   const waveCounts = useMemo(() => {
     const counts = Object.fromEntries(availableWaveTimes.map((time) => [time, 0])) as Record<string, number>;
     Object.values(wavesById).forEach((wave) => {
+      if (isLiftEvent && wave.isOlympicFlight) return;
       const rawTime = String(wave.startTime || '').trim();
       const normalizedTime = parseClockToMinutes(rawTime);
       if (normalizedTime === null) return;
@@ -547,7 +596,7 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
       counts[label] += Array.isArray(wave.participants) ? wave.participants.length : 0;
     });
     return counts;
-  }, [availableWaveTimes, wavesById]);
+  }, [availableWaveTimes, wavesById, isLiftEvent]);
 
   const overCapacityWaveSet = useMemo(() => {
     const set = new Set<string>();
@@ -561,6 +610,22 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
 
     return set;
   }, [waveCounts, configuredCapacity]);
+
+  // Catches Google Form <-> Settings schedule drift: a lifter's preference that doesn't
+  // land on any currently configured flight can never be assigned by staff.
+  const unmatchedLiftPreferenceCount = useMemo(() => {
+    const liftRows = sheetRows.filter((row) => row.registrationTemplate === 'lift-event');
+    if (liftRows.length === 0) return 0;
+
+    return liftRows.reduce((total, row) => {
+      const mismatches = findUnmatchedLiftPreferences([
+        { movement: 'Squat', firstPreference: row.squatFirstPreference, secondPreference: row.squatSecondPreference },
+        { movement: 'Bench', firstPreference: row.benchFirstPreference, secondPreference: row.benchSecondPreference },
+        { movement: 'Deadlift', firstPreference: row.deadliftFirstPreference, secondPreference: row.deadliftSecondPreference },
+      ], liftFlights);
+      return total + mismatches.length;
+    }, 0);
+  }, [sheetRows, liftFlights]);
 
   useEffect(() => {
     const pendingRows = Object.keys(pendingSyncByRow);
@@ -639,25 +704,93 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
         source: 'manual-ops',
       }, { merge: true });
 
-      if (row.confirmedWaveTime) {
-        const normalizedConfirmedTime = parseClockToMinutes(row.confirmedWaveTime);
-        const waveEntry = Object.values(wavesById).find((wave) => {
-          const normalizedWaveTime = parseClockToMinutes(String(wave.startTime || ''));
-          return normalizedWaveTime !== null && normalizedWaveTime === normalizedConfirmedTime;
-        });
-
-        if (waveEntry) {
-          await setDoc(doc(db, 'events', eventId, 'waves', waveEntry.id, 'participants', row.id), {
+      const rosterWaves = Object.values(wavesById).filter((wave) =>
+        wave.participants?.some((participant) => participant.id === row.id)
+      );
+      if (rosterWaves.length > 0) {
+        await Promise.all(rosterWaves.map((wave) =>
+          setDoc(doc(db, 'events', eventId, 'waves', wave.id, 'participants', row.id), {
             id: row.id,
             olympicLiftsOptIn,
             updatedAt: now,
-          }, { merge: true });
-          await useWaveStore.getState().loadAll({ preserveActiveEvent: true, force: true });
-        }
+          }, { merge: true })
+        ));
+        await useWaveStore.getState().loadAll({ preserveActiveEvent: true, force: true });
       }
     } catch (error) {
       console.error('Failed to update Olympic lift opt-in:', error);
       alert('Failed to update Olympic lift opt-in. Please try again.');
+    } finally {
+      setBusy(row.id, null);
+    }
+  };
+
+  const handleLiftFlightAssignment = async (
+    row: RegistrationRow,
+    action: 'assign_lift' | 'sync_lift',
+    movement?: string,
+    flightLabel?: string
+  ) => {
+    setBusy(row.id, action === 'sync_lift' ? 'Syncing' : 'Assigning');
+    try {
+      const response = await fetch('/api/register/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_id: eventId,
+          participant_id: row.id,
+          action,
+          movement,
+          flight_label: flightLabel,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Failed to assign flight');
+      await useWaveStore.getState().loadAll({ preserveActiveEvent: true, force: true });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to assign flight');
+    } finally {
+      setBusy(row.id, null);
+    }
+  };
+
+  const handleRegistrationAttemptChange = (movement: string, value: string) => {
+    if (!selectedFlightParticipant) return;
+    const { waveId, participant } = selectedFlightParticipant;
+    updateParticipantData(waveId, participant.id, getAttemptField(movement, 1), value);
+    const weights = [1, 2, 3].map((attempt) => {
+      const raw = attempt === 1 ? value : participant.waveData?.[getAttemptField(movement, attempt)];
+      const parsed = parseFloat(raw || '');
+      return Number.isFinite(parsed) ? parsed : 0;
+    });
+    const best = Math.max(...weights);
+    updateParticipantData(waveId, participant.id, movement, best > 0 ? String(best) : '');
+  };
+
+  const handleLiftDetailChange = async (
+    row: RegistrationRow,
+    updates: Partial<Pick<RegistrationRow, 'genderCategory' | 'bodyWeight' | 'liftMovementPrs'>>
+  ) => {
+    setBusy(row.id, 'Saving');
+    try {
+      const { db } = getFirebase();
+      const updatedAt = new Date().toISOString();
+      await setDoc(doc(db, 'events', eventId, 'registrations', row.id), {
+        participantId: row.id,
+        ...updates,
+        updatedAt,
+        source: 'manual-ops',
+      }, { merge: true });
+      await Promise.all(Object.values(wavesById)
+        .filter((wave) => wave.participants?.some((participant) => participant.id === row.id))
+        .map((wave) => setDoc(doc(db, 'events', eventId, 'waves', wave.id, 'participants', row.id), {
+          id: row.id,
+          ...updates,
+          updatedAt,
+        }, { merge: true })));
+      await useWaveStore.getState().loadAll({ preserveActiveEvent: true, force: true });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to save participant details');
     } finally {
       setBusy(row.id, null);
     }
@@ -753,31 +886,60 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Total</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{sheetRows.length}</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Confirmed</p>
-          <p className="text-2xl font-bold mt-1" style={{ color: accent }}>{confirmedCount}</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Waitlisted</p>
-          <p className="text-2xl font-bold text-amber-700 mt-1">{waitlistedCount}</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Pending Queue</p>
-          <p className="text-2xl font-bold text-red-700 mt-1">{pendingCancellationCount}</p>
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-gray-900 mb-2">Mini {isLiftEvent ? 'Flight' : 'Wave'} Tracker</h3>
+        {availableWaveTimes.length === 0 && (
+          <p className="text-xs text-gray-500 mb-2">Configure event times in Settings.</p>
+        )}
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
+          {availableWaveTimes.map((time) => {
+            const count = waveCounts[time] || 0;
+            const atCapacity = configuredCapacity !== null && count >= configuredCapacity;
+            const isOverCapacity = overCapacityWaveSet.has(time);
+            return (
+              <div
+                key={time}
+                className={`flex items-center justify-between rounded-md px-2 py-1.5 ${
+                  isOverCapacity ? 'border border-yellow-300 bg-yellow-100' : 'border border-gray-200'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onNavigateToWaveTime?.(time)}
+                  className="min-w-0 rounded-md px-1.5 py-0.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2"
+                  style={{ ['--tw-ring-color' as string]: accent }}
+                  title={`Open ${time} in ${isLiftEvent ? 'Flights' : 'Waves'} tab`}
+                >
+                  {time}
+                </button>
+                <span className={`text-xs font-semibold ${atCapacity ? 'text-red-700' : 'text-gray-900'}`}>
+                  {configuredCapacity !== null ? `${count}/${configuredCapacity}` : `${count}/-`}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
+      {unmatchedLiftPreferenceCount > 0 && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm font-semibold text-red-800">
+            ⚠️ {unmatchedLiftPreferenceCount} lift preference{unmatchedLiftPreferenceCount === 1 ? '' : 's'} don&apos;t match any currently configured flight.
+          </p>
+          <p className="text-xs text-red-700 mt-1">
+            This means the Google Form&apos;s time slots and this event&apos;s Settings flights are out of sync for at least one lift.
+            Check Settings against the real Form questions before assigning flights.
+          </p>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name..."
+            aria-label="Search registrations by name"
             className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
           />
           <select
@@ -793,42 +955,23 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
             <option value="Cancelled">Cancelled</option>
           </select>
 
-          <select
-            value={swimFilter}
-            onChange={(e) => setSwimFilter(e.target.value as 'All' | 'N' | 'I' | 'A')}
-            className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand bg-white"
-          >
-            <option value="All">All Swim Levels</option>
-            <option value="N">Novice</option>
-            <option value="I">Intermediate</option>
-            <option value="A">Advanced</option>
-          </select>
-
-          <select
-            value={firstTriFilter}
-            onChange={(e) => setFirstTriFilter(e.target.value as 'All' | 'Yes' | 'No')}
-            className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand bg-white"
-          >
-            <option value="All">All Experiences</option>
-            <option value="Yes">Yes ★</option>
-            <option value="No">No</option>
-          </select>
-
-          <select
-            value={entryModeFilter}
-            onChange={(e) => setEntryModeFilter(e.target.value as 'All' | 'S' | 'B' | 'G')}
-            className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand bg-white"
-          >
-            <option value="All">All Group Sizes</option>
-            <option value="S">Single/Solo</option>
-            <option value="B">Buddy</option>
-            <option value="G">Group</option>
-          </select>
+          {availableFilters.map((filter) => (
+            <select
+              key={filter.key}
+              aria-label={`Filter by ${filter.label}`}
+              value={fieldFilters[filter.key] || ''}
+              onChange={(event) => setFieldFilters((previous) => ({ ...previous, [filter.key]: event.target.value }))}
+              className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand bg-white"
+            >
+              <option value="">{filter.key === 'tri' ? 'First Triathlon: Any' : `All ${filter.label}s`}</option>
+              {filter.options.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          ))}
 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_270px] gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${isLiftEvent ? 'lg:grid-cols-2' : 'xl:grid-cols-[minmax(0,1fr)_270px]'}`}>
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
           {isLoading ? (
             <div className="p-8 text-center text-gray-600">Loading registrations...</div>
@@ -838,14 +981,20 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
             <div className="p-8 text-center text-gray-600">No registrations found for this filter.</div>
           ) : (
             <div ref={listScrollRef} className="overflow-x-auto">
-              <table className="min-w-full text-sm">
+              <table className={`min-w-full text-sm ${isLiftEvent ? 'table-fixed' : ''}`}>
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-3 py-2.5 font-semibold text-gray-700">Participant</th>
-                    <th className="text-left px-3 py-2.5 font-semibold text-gray-700">Status</th>
-                    <th className="text-left px-3 py-2.5 font-semibold text-gray-700">Assigned Wave</th>
-                    <th className="text-left px-3 py-2.5 font-semibold text-gray-700">Preferences</th>
-                    <th className="text-left px-3 py-2.5 font-semibold text-gray-700">Actions</th>
+                    <th className={`text-left px-3 py-2.5 font-semibold text-gray-700 ${isLiftEvent ? 'w-[28%]' : ''}`}>Participant</th>
+                    <th className={`text-left px-3 py-2.5 font-semibold text-gray-700 ${isLiftEvent ? 'w-[22%]' : ''}`}>Status</th>
+                    {isLiftEvent ? (
+                      <th className="px-3 py-2.5 text-left font-semibold text-gray-700">Assigned Flights</th>
+                    ) : (
+                      <>
+                        <th className="text-left px-3 py-2.5 font-semibold text-gray-700">Preferences</th>
+                        <th className="text-left px-3 py-2.5 font-semibold text-gray-700">Assigned Wave</th>
+                      </>
+                    )}
+                    {!isLiftEvent && <th className="text-left px-3 py-2.5 font-semibold text-gray-700">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -869,29 +1018,42 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
                     return (
                       <tr
                         key={row.id}
-                        className={`border-b border-gray-100 ${rowClass}`}
+                        onClick={isLiftEvent ? () => setSelectedRegistrationId(row.id) : undefined}
+                        onKeyDown={isLiftEvent ? (event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedRegistrationId(row.id);
+                          }
+                        } : undefined}
+                        tabIndex={isLiftEvent ? 0 : undefined}
+                        aria-selected={isLiftEvent ? selectedRegistrationId === row.id : undefined}
+                        className={`border-b border-gray-100 ${isLiftEvent ? 'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500' : ''} ${isLiftEvent && selectedRegistrationId === row.id ? 'bg-blue-50' : rowClass}`}
                       >
                         <td className="px-3 py-2 align-middle">
-                          <div className="flex items-center gap-1.5 whitespace-nowrap min-w-[280px]">
+                          <div className={`flex items-center gap-1.5 whitespace-nowrap ${row.registrationTemplate === 'lift-event' ? 'min-w-[160px]' : 'min-w-[280px]'}`}>
                             <span className="font-semibold text-gray-900">{row.name || 'Unnamed participant'}</span>
 
-                            <span className="relative inline-flex group">
-                              <span
-                                tabIndex={0}
-                                aria-label={`Entry type ${getEntryModeLabel(row.entryMode, row.groupName)}`}
-                                className={`inline-flex items-center justify-center h-5 min-w-5 rounded-full px-1 text-[10px] font-bold ${getEntryModeBadgeClass(row.entryMode, row.groupName)}`}
-                              >
-                                {getEntryModeCode(row.entryMode, row.groupName)}
-                              </span>
-                              <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-                                Entry: {getEntryModeLabel(row.entryMode, row.groupName)}
-                              </span>
-                            </span>
+                            {row.registrationTemplate !== 'lift-event' && (
+                              <>
+                                <span className="relative inline-flex group">
+                                  <span
+                                    tabIndex={0}
+                                    aria-label={`Entry type ${getEntryModeLabel(row.entryMode, row.groupName)}`}
+                                    className={`inline-flex items-center justify-center h-5 min-w-5 rounded-full px-1 text-[10px] font-bold ${getEntryModeBadgeClass(row.entryMode, row.groupName)}`}
+                                  >
+                                    {getEntryModeCode(row.entryMode, row.groupName)}
+                                  </span>
+                                  <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                                    Entry: {getEntryModeLabel(row.entryMode, row.groupName)}
+                                  </span>
+                                </span>
 
-                            <CommunityOptIcon label="Ping group" glyph="P" optedIn={row.pingGroupOptIn} />
-                            <CommunityOptIcon label="Leaderboard" glyph="🏆" optedIn={row.includeInLeaderboard} />
+                                <CommunityOptIcon label="Ping group" glyph="P" optedIn={row.pingGroupOptIn} />
+                                <CommunityOptIcon label="Leaderboard" glyph="🏆" optedIn={row.includeInLeaderboard} />
+                              </>
+                            )}
 
-                            {olympicLiftMovements.length > 0 && (
+                            {row.registrationTemplate !== 'lift-event' && olympicLiftMovements.length > 0 && (
                               <label className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
                                 <input
                                   type="checkbox"
@@ -906,7 +1068,7 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
                               </label>
                             )}
 
-                            {getCompanionDisplayName(row.entryMode, row.groupName) && (
+                            {row.registrationTemplate !== 'lift-event' && getCompanionDisplayName(row.entryMode, row.groupName) && (
                               <span className="relative inline-flex group">
                                 <span
                                   tabIndex={0}
@@ -935,24 +1097,45 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2 align-middle text-gray-700 whitespace-nowrap">{row.confirmedWaveTime || '-'}</td>
-                        <td className="px-3 py-2 align-middle text-gray-700 min-w-[240px]">
-                          <div className="space-y-0.5 leading-tight">
-                            {firstPref ? (
-                              <div className="truncate" title={firstPref}>
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1">1st</span>
-                                <span>{firstPref}</span>
+                        {isLiftEvent ? (
+                          <td className="min-w-0 px-3 py-2 align-middle text-xs text-gray-700">
+                            {row.registrationTemplate === 'lift-event' ? (
+                              <div className="flex min-w-0 gap-4 overflow-x-auto whitespace-nowrap leading-5">
+                                {Object.entries(row.liftMovementFlights)
+                                  .filter(([, flight]) => Boolean(flight))
+                                  .sort(([first], [second]) => compareFlightMovements(first, second))
+                                  .map(([movement, flight]) => (
+                                    <span key={movement} className="shrink-0">
+                                      <span className="font-semibold">{movement}:</span> {flight}
+                                    </span>
+                                  ))}
+                                {!Object.values(row.liftMovementFlights).some(Boolean) && <span>-</span>}
                               </div>
-                            ) : null}
-                            {secondPref ? (
-                              <div className="truncate" title={secondPref}>
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1">2nd</span>
-                                <span>{secondPref}</span>
-                              </div>
-                            ) : null}
-                            {!firstPref && !secondPref ? <span>-</span> : null}
-                          </div>
-                        </td>
+                            ) : row.confirmedWaveTime || '-'}
+                          </td>
+                        ) : (
+                          <>
+                          <td className="min-w-[240px] px-3 py-2 align-middle text-gray-700">
+                            <div className="space-y-0.5 leading-tight">
+                              {firstPref ? (
+                                <div className="truncate" title={firstPref}>
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1">1st</span>
+                                  <span>{firstPref}</span>
+                                </div>
+                              ) : null}
+                              {secondPref ? (
+                                <div className="truncate" title={secondPref}>
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1">2nd</span>
+                                  <span>{secondPref}</span>
+                                </div>
+                              ) : null}
+                              {!firstPref && !secondPref ? <span>-</span> : null}
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2 align-middle text-gray-700">{row.confirmedWaveTime || '-'}</td>
+                          </>
+                        )}
+                        {row.registrationTemplate !== 'lift-event' && (
                         <td className="px-3 py-2 align-middle">
                           <div className="flex flex-wrap items-center gap-1 min-w-[300px]">
                             <button
@@ -1018,6 +1201,7 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
                             </button>
                           </div>
                         </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -1027,53 +1211,180 @@ export default function RegistrationsTab({ eventId, accent, onNavigateToWaveTime
           )}
         </div>
 
-        <aside className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 h-fit">
-          <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-700">Row Key</h4>
-            <div className="mt-2 space-y-1 text-[11px] text-gray-700">
-              <div>S / B / G = Solo / Buddy / Group</div>
-              <div>P = Ping group</div>
-              <div>🏆 = Leaderboard</div>
+        {isLiftEvent && (
+          <aside className="min-w-0 self-start rounded-lg border border-gray-200 bg-white p-4 shadow-lg">
+            {!selectedRegistration ? (
+              <div className="flex min-h-[12rem] items-center justify-center text-center text-sm text-gray-400">
+                Select a lifter from the list to view and edit their details.
+              </div>
+            ) : (
+            <div>
+            <div className="mb-4 flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">{selectedRegistration.name || 'Unnamed participant'}</h3>
+                <p className="text-xs text-gray-500">{selectedRegistration.registrationStatus}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedRegistrationId(null)}
+                aria-label="Close participant details"
+                className="text-xl text-gray-500 hover:text-gray-900"
+              >
+                ×
+              </button>
             </div>
-          </div>
-
-          <h3 className="text-sm font-semibold text-gray-900 mb-1">Mini Wave Tracker</h3>
-          {availableWaveTimes.length === 0 && (
-            <p className="text-xs text-gray-500 mb-2">Configure start time, interval, and total waves in Event Settings.</p>
-          )}
-          <div className="space-y-1.5">
-            {availableWaveTimes.map((time) => {
-              const count = waveCounts[time] || 0;
-              const atCapacity = configuredCapacity !== null && count >= configuredCapacity;
-              const isOverCapacity = overCapacityWaveSet.has(time);
-              return (
-                <div
-                  key={time}
-                  className={`flex items-center justify-between rounded-md px-2 py-1.5 ${
-                    isOverCapacity ? 'border border-yellow-300 bg-yellow-100' : 'border border-gray-200'
-                  }`}
+            <div className="mb-4 flex items-center justify-between gap-3 border-b border-gray-200 pb-3">
+              <p className="text-xs text-gray-600">{Object.values(selectedRegistration.liftMovementFlights).filter(Boolean).length} flights selected</p>
+              <button
+                type="button"
+                onClick={() => void handleLiftFlightAssignment(selectedRegistration, 'sync_lift')}
+                disabled={!!rowBusyAction[selectedRegistration.id] || selectedRegistration.registrationStatus === 'Cancelled' || !Object.values(selectedRegistration.liftMovementFlights).some(Boolean)}
+                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ backgroundColor: accent }}
+              >
+                {rowBusyAction[selectedRegistration.id] === 'Syncing' ? 'Syncing...' : 'Sync Assignment'}
+              </button>
+            </div>
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">Gender Category</span>
+                <select
+                  value={selectedRegistration.genderCategory}
+                  onChange={(event) => void handleLiftDetailChange(selectedRegistration, { genderCategory: event.target.value })}
+                  disabled={!!rowBusyAction[selectedRegistration.id]}
+                  className="input-focus-brand w-full rounded-md border border-gray-300 bg-white p-2 text-sm disabled:opacity-50"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <button
-                      type="button"
-                      onClick={() => onNavigateToWaveTime?.(time)}
-                      className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                      style={{
-                        ['--tw-ring-color' as string]: accent,
-                      }}
-                      title={`Open ${time} in Waves tab`}
-                    >
-                      {time}
-                    </button>
-                  </div>
-                  <span className={`text-xs font-semibold ${atCapacity ? 'text-red-700' : 'text-gray-900'}`}>
-                    {configuredCapacity !== null ? `${count}/${configuredCapacity}` : `${count}/-`}
-                  </span>
+                  <option value="">Select</option>
+                  {['Female', 'Male', 'Non-Binary'].map((division) => (
+                    <option key={division} value={division}>{division}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="min-w-0">
+                <label htmlFor={`registration-bodyweight-${selectedRegistration.id}`} className="mb-1 block text-xs font-medium text-gray-600">Bodyweight</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id={`registration-bodyweight-${selectedRegistration.id}`}
+                    key={`${selectedRegistration.id}-bodyweight`}
+                    type="text"
+                    inputMode="decimal"
+                    defaultValue={selectedRegistration.bodyWeight}
+                    onBlur={(event) => {
+                      const value = event.target.value.trim();
+                      if (value !== selectedRegistration.bodyWeight) void handleLiftDetailChange(selectedRegistration, { bodyWeight: value });
+                    }}
+                    disabled={!!rowBusyAction[selectedRegistration.id]}
+                    className="input-focus-brand min-w-0 flex-1 rounded-md border border-gray-300 p-2 text-sm disabled:opacity-50"
+                  />
+                  {olympicLiftMovements.length > 0 && (
+                    <label className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedRegistration.olympicLiftsOptIn}
+                        disabled={!!rowBusyAction[selectedRegistration.id]}
+                        onChange={(event) => void handleOlympicOptInChange(selectedRegistration, event.target.checked)}
+                      />
+                      Oly opt-in
+                    </label>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-        </aside>
+              </div>
+            </div>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Flight per Movement</h4>
+            <div className="overflow-x-auto">
+            <div className="grid min-w-[560px] grid-cols-5 gap-2 xl:min-w-0">
+              {Object.entries(liftFlights)
+                .filter(([, flights]) => flights.length > 0)
+                .sort(([first], [second]) => compareFlightMovements(first, second))
+                .map(([movement, flights]) => {
+                  const preference = selectedLiftPreferences.find((entry) => entry.movement === movement)?.preference || '-';
+                  const formOpener = movement === 'Squat' ? selectedRegistration.squatOpenerWeight
+                    : movement === 'Bench' ? selectedRegistration.benchOpenerWeight
+                      : movement === 'Deadlift' ? selectedRegistration.deadliftOpenerWeight : '';
+                  const canRecord = !!selectedFlightParticipant &&
+                    (!olympicLiftMovements.includes(movement) || selectedRegistration.olympicLiftsOptIn);
+                  return (
+                  <div key={movement} className="rounded-md border border-slate-200 bg-white p-2">
+                    <div className="mb-2 min-h-16">
+                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">Preferences</span>
+                      <p className="text-[11px] leading-tight text-gray-600">{preference}</p>
+                    </div>
+                    <div className="mb-2 flex min-h-8 items-start gap-1">
+                      <span className="text-xs font-semibold leading-tight text-gray-700">{movement}</span>
+                      {olympicLiftMovements.includes(movement) && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">OLY</span>}
+                    </div>
+                    <label className="mb-2 block">
+                    <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">Flight</span>
+                    <select
+                      value={selectedRegistration.liftMovementFlights[movement] || ''}
+                      onChange={(event) => void handleLiftFlightAssignment(selectedRegistration, 'assign_lift', movement, event.target.value)}
+                      disabled={!!rowBusyAction[selectedRegistration.id] || selectedRegistration.registrationStatus === 'Cancelled'}
+                      className="input-focus-brand w-full rounded-md border border-gray-300 bg-white p-1.5 text-xs disabled:opacity-50"
+                    >
+                      <option value="">—</option>
+                      {flights.map((flight) => (
+                        <option key={flight.id} value={flight.label}>{flight.label}</option>
+                      ))}
+                    </select>
+                    </label>
+                    <label className="mb-2 block">
+                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">1st Attempt</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={selectedFlightParticipant?.participant.waveData?.[getAttemptField(movement, 1)] ?? formOpener}
+                        onChange={(event) => handleRegistrationAttemptChange(movement, event.target.value)}
+                        onBlur={() => {
+                          if (canRecord && selectedFlightParticipant) {
+                            void saveWavePerformance(selectedFlightParticipant.waveId, eventId).catch((error) => {
+                              console.error('Failed to save first attempt:', error);
+                            });
+                          }
+                        }}
+                        readOnly={!canRecord}
+                        aria-label={`${movement} first attempt weight`}
+                        className="input-focus-brand w-full rounded border border-gray-300 px-2 py-1 text-sm read-only:bg-gray-50"
+                      />
+                    </label>
+                    <label className="mb-2 block">
+                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">PR</span>
+                      <input
+                        key={`${selectedRegistration.id}-${movement}-pr`}
+                        type="text"
+                        inputMode="decimal"
+                        defaultValue={selectedRegistration.liftMovementPrs[movement] || ''}
+                        onBlur={(event) => {
+                          const value = event.target.value.trim();
+                          if (value !== (selectedRegistration.liftMovementPrs[movement] || '')) void handleLiftDetailChange(selectedRegistration, {
+                            liftMovementPrs: { ...selectedRegistration.liftMovementPrs, [movement]: value },
+                          });
+                        }}
+                        disabled={!!rowBusyAction[selectedRegistration.id]}
+                        className="input-focus-brand w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-sm font-semibold disabled:opacity-50"
+                      />
+                    </label>
+                  </div>
+                  );
+                })}
+            </div>
+            </div>
+            </div>
+            )}
+          </aside>
+        )}
+
+        {!isLiftEvent && (
+          <aside className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 h-fit">
+            <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-700">Row Key</h4>
+              <div className="mt-2 space-y-1 text-[11px] text-gray-700">
+                <div>S / B / G = Solo / Buddy / Group</div>
+                <div>P = Ping group</div>
+                <div>🏆 = Leaderboard</div>
+              </div>
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

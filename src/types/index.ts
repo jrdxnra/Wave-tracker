@@ -5,11 +5,15 @@ export interface Participant {
   includeInLeaderboard?: boolean; // Optional for backwards compatibility
   pingGroupOptIn?: boolean; // Optional for backwards compatibility
   olympicLiftsOptIn?: boolean; // Lift Event only: participant is doing Olympic lift movements
+  olympicSessionStart?: string; // Lift Event only: start time of the selected open Olympic session
+  powerliftingEntry?: boolean; // Lift Event only: explicit powerlifting check-in, independent of Olympic opt-in
   bodyWeight?: string; // Lift Event only: participant bodyweight for lifting score context
+  genderCategory?: string; // Lift Event only: leaderboard division category
   rackHeight?: string; // Deprecated: use liftMovementRackHeights instead (rack height differs per movement)
   liftMovementFlights?: Record<string, string>; // Lift Event only: flight letter per movement (e.g. Squat: "A", Bench: "C") — a lifter's flight can differ per movement
   liftMovementRacks?: Record<string, string>; // Lift Event only: rack/platform assignment per movement (e.g. Squat: "Rack 1", Snatch: "Platform A")
   liftMovementRackHeights?: Record<string, string>; // Lift Event only: rack height/pin setting per movement (rack-based movements only, e.g. Squat, Bench)
+  liftMovementPrs?: Record<string, string>; // Lift Event only: personal record target per movement, used to trigger PR badge updates when attempts exceed it
 }
 
 export type MovementUnit = 'reps' | 'laps' | 'cals' | 'meters' | 'seconds' | 'rounds';
@@ -20,6 +24,7 @@ export interface Wave {
   participants: Participant[];
   startTime: string;
   coach?: string; // Name of the coach assigned to this wave
+  isOlympicFlight?: boolean; // Lift Event only: disambiguates Flight cards when Olympic and Powerlifting flights share a start time
 }
 
 export interface FeedbackEntry {

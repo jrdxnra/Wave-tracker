@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore, initializeFirestore, Firestore } from 'firebase/firestore';
+import { connectFirestoreEmulator, getFirestore, initializeFirestore, Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -52,6 +52,9 @@ export function getFirebase() {
       );
     } catch {
       db = getFirestore(app);
+    }
+    if (process.env.NEXT_PUBLIC_USE_FIRESTORE_EMULATOR === 'true') {
+      connectFirestoreEmulator(db, '127.0.0.1', 8080);
     }
   }
   return { app, db };

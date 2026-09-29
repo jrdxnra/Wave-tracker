@@ -1,5 +1,11 @@
 # Future Improvements
 
+## Leaderboard
+
+- Add live leaderboard controls: athlete search, division and movement filters, and ranking modes for raw results, totals, or formula scores.
+- Add an athlete spotlight panel showing all lifts, PR status, wave, and comparison details.
+- Calculate and display real DOTS and Sinclair scores for live lift-event results instead of ranking only by raw weight.
+
 ## Pinned
 
 ### Global client tracking and cross-event leaderboard
@@ -17,6 +23,7 @@
 
 ### Self-serve Google Form and Sheet integration
 
+- A registration script generator and copy UI now exist in Event Configuration; verify the generated script end to end before treating setup as self-serve. Apps Script still needs manual installation and trigger authorization.
 - Build a self-serve integration flow so admins can configure Google Form/Sheet registration sync without manually editing Apps Script constants.
 - Generate a ready-to-paste Apps Script from event settings such as event ID, backend URL, secrets, and expected response sheet name.
 - Decide between two supported models:
@@ -28,11 +35,15 @@
 
 ### Rebuild "Waitlist" and "Analytics" tabs (missing from GitHub repo)
 
-- Production (`wavetracker.web.app`) currently has 4 tabs: Waves, Registrations, Waitlist, Analytics. This repo (all branches) only has Waves and Registrations — Waitlist and Analytics were deployed straight to prod from a source that was never committed/pushed to GitHub, and are not recoverable (no other Codespace, no session history, no exposed sourcemaps on the live bundle). Full investigation details in [TROUBLESHOOTING_LOG.md](TROUBLESHOOTING_LOG.md) (2026-09-21 entry).
-- Plan: rebuild both tabs from scratch as new features in this repo, using the live production site as a functional/visual reference (screenshots or a walkthrough of what each tab currently does).
-- **Hard rule until rebuilt: no prod deploys** — deploying this repo to production as-is would erase those two tabs.
+- Production (`wavetracker.web.app`) has Waitlist and Analytics tabs whose original source was never committed. Investigation details: [TROUBLESHOOTING_LOG.md](TROUBLESHOOTING_LOG.md) (2026-09-21 entry).
+- This repo now has separate Waitlist and Analytics tabs. Waitlist has a detail view and an admit-to-flights API, but the separate Form/Sheet intake is not connected and admission has not been tested with a real waitlist record. Analytics still displays a labeled reference snapshot, not live event calculations.
+- **No prod deploys yet:** replace the reference analytics with live event-scoped results, connect and test waitlist intake/admission, and verify the production tabs' required workflows before overwriting production Hosting.
 
 ### New "Lift Event" template
 
 This graduated from an idea to an active in-progress build. Full plan, decisions, and task checklist now live in [LIFT_EVENT_PLAN.md](LIFT_EVENT_PLAN.md) (with [LIFT_EVENT_TROUBLESHOOTING.md](LIFT_EVENT_TROUBLESHOOTING.md) tracking issues as we build it) — see those files instead of this entry going forward.
+
+- The Flight tab now creates distinct Powerlifting and Olympic session pills at shared start times. Snatch and Clean & Jerk are grouped into each Olympic session, while a lifter has one participant record and per-movement assignments.
+- Registrations owns initial assignments and resync; Flights can move assigned lifters. Verify the full assignment and capacity workflow with test records before production, including overlapping sessions and waitlist replacements.
+- Powerlifting has the configured capacity; Olympic sessions are open-ended and must not consume Powerlifting slots. Check this against live event data before production rollout.
 

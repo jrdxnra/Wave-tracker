@@ -5,16 +5,23 @@ import { doc, setDoc } from 'firebase/firestore';
 import { getFirebase } from '@/lib/firebase';
 import { useWaveStore } from '@/store/waveStore';
 import type { Participant, Wave } from '@/types';
+import { getAttemptField, getAttemptStatusField, getBestLiftFromAttempts, type AttemptStatus } from '@/lib/liftAttempts';
 
 interface RosterEntry {
   waveId: string;
   participant: Participant;
 }
 
-const getAttemptField = (movement: string, attemptNumber: number) => `${movement}__attempt_${attemptNumber}`;
-const getAttemptStatusField = (movement: string, attemptNumber: number) => `${getAttemptField(movement, attemptNumber)}_status`;
+const compareByFirstAttempt = (movement: string) => (first: RosterEntry, second: RosterEntry) => {
+  const firstWeight = Number.parseFloat((first.participant.waveData || {})[getAttemptField(movement, 1)] || '');
+  const secondWeight = Number.parseFloat((second.participant.waveData || {})[getAttemptField(movement, 1)] || '');
+  const firstHasWeight = Number.isFinite(firstWeight);
+  const secondHasWeight = Number.isFinite(secondWeight);
 
-type AttemptStatus = 'pending' | 'good' | 'miss';
+  if (firstHasWeight !== secondHasWeight) return firstHasWeight ? -1 : 1;
+  if (firstHasWeight && firstWeight !== secondWeight) return firstWeight - secondWeight;
+  return first.participant.name.localeCompare(second.participant.name);
+};
 
 const RACK_HEIGHT_OPTIONS = Array.from({ length: 8 }, (_, i) => String(i + 7));
 
@@ -37,7 +44,6 @@ export default function LiftPerformanceBoard() {
     themeColors,
     updateParticipantData,
     saveWavePerformance,
-    loadAll,
   } = useWaveStore();
 
   const accent = themeColors.accent;
@@ -118,11 +124,34 @@ export default function LiftPerformanceBoard() {
   }, [waves, movement, flightLabel, movementIsPlatform]);
 
   const unassigned = roster.filter((entry) => !entry.participant.liftMovementRacks?.[movement]);
-  const assignedToSelectedRack = roster.filter((entry) => entry.participant.liftMovementRacks?.[movement] === rackKey);
+  const assignedToSelectedRack = roster
+    .filter((entry) => entry.participant.liftMovementRacks?.[movement] === rackKey)
+    .sort(compareByFirstAttempt(movement));
 
   const handleAssignRack = async (entry: RosterEntry, nextRackKey: string) => {
     if (!nextRackKey) return;
+    const previousRacks = entry.participant.liftMovementRacks || {};
     const nextRacks = { ...(entry.participant.liftMovementRacks || {}), [movement]: nextRackKey };
+    const applyLocalRackAssignment = (liftMovementRacks: Record<string, string>) => {
+      useWaveStore.setState((state) => {
+        const wave = state.waves[entry.waveId];
+        if (!wave) return state;
+        return {
+          waves: {
+            ...state.waves,
+            [entry.waveId]: {
+              ...wave,
+              participants: wave.participants.map((participant) => (
+                participant.id === entry.participant.id ? { ...participant, liftMovementRacks } : participant
+              )),
+            },
+          },
+        };
+      });
+    };
+
+    applyLocalRackAssignment(nextRacks);
+
     try {
       const { db } = getFirebase();
       const now = new Date().toISOString();
@@ -140,34 +169,27 @@ export default function LiftPerformanceBoard() {
           source: 'manual-ops',
         }, { merge: true });
       }
-
-      await loadAll({ preserveActiveEvent: true, force: true });
     } catch (error) {
+      applyLocalRackAssignment(previousRacks);
       console.error('Failed to assign rack:', error);
       alert('Failed to assign rack. Please try again.');
     }
   };
 
-
+  // Entered weights are never rewritten here — "Miss" only sets the status flag,
+  // and every reader (leaderboard, PR badge, print sheet) derives the best lift
+  // from attempts + status via getBestLiftFromAttempts, so there's one source of truth.
   const handleAttemptChange = (entry: RosterEntry, attemptNumber: number, value: string) => {
     const field = getAttemptField(movement, attemptNumber);
     updateParticipantData(entry.waveId, entry.participant.id, field, value);
-
-    const waveData = entry.participant.waveData || {};
-    const attemptValues = [1, 2, 3].map((n) => {
-      const raw = n === attemptNumber ? value : waveData[getAttemptField(movement, n)];
-      const parsed = parseFloat(raw || '');
-      return Number.isFinite(parsed) ? parsed : 0;
-    });
-    const best = Math.max(...attemptValues);
-    updateParticipantData(entry.waveId, entry.participant.id, movement, best > 0 ? String(best) : '');
   };
 
   const handleAttemptStatusChange = (entry: RosterEntry, attemptNumber: number, status: AttemptStatus) => {
     const field = getAttemptStatusField(movement, attemptNumber);
     const waveData = entry.participant.waveData || {};
     const current = waveData[field] as AttemptStatus | undefined;
-    updateParticipantData(entry.waveId, entry.participant.id, field, current === status ? 'pending' : status);
+    const nextStatus = current === status ? 'pending' : status;
+    updateParticipantData(entry.waveId, entry.participant.id, field, nextStatus);
   };
 
   const handleAttemptBlur = async (waveId: string) => {
@@ -273,7 +295,7 @@ export default function LiftPerformanceBoard() {
                         <select
                           value={rackHeightSettings[movement]?.[key] || ''}
                           onChange={(e) => void setRackHeightSetting(movement, key, e.target.value, activeEventId)}
-                          className="h-6 rounded border border-gray-300 bg-white px-1 text-[11px] font-semibold text-gray-700"
+                          className="h-6 rounded border border-gray-300 bg-white px-1 pr-0 text-[11px] font-semibold text-gray-700 appearance-none"
                         >
                           <option value="">—</option>
                           {RACK_HEIGHT_OPTIONS.map((h) => (
@@ -319,7 +341,7 @@ export default function LiftPerformanceBoard() {
                       <select
                         defaultValue=""
                         onChange={(e) => void handleAssignRack(entry, e.target.value)}
-                        className="h-8 rounded-md border border-gray-300 bg-white px-2 text-xs font-semibold text-gray-700"
+                        className="h-8 rounded-md border border-gray-300 bg-white px-2 pr-0 text-xs font-semibold text-gray-700 appearance-none"
                       >
                         <option value="" disabled>Choose {movementIsPlatform ? 'platform' : 'rack'}…</option>
                         {rackKeys.map((key) => {
@@ -352,8 +374,7 @@ export default function LiftPerformanceBoard() {
                     rackKeys={rackKeys}
                     isPlatform={movementIsPlatform}
                     showRackHeight={movementUsesRack}
-                    onAssign={handleAssignRack}
-                    onAttemptChange={handleAttemptChange}
+                    onAssign={handleAssignRack}                    onAttemptChange={handleAttemptChange}
                     onAttemptStatusChange={handleAttemptStatusChange}
                     onAttemptBlur={handleAttemptBlur}
                   />
@@ -415,12 +436,18 @@ function LifterAttemptCard({
   const waveData = entry.participant.waveData || {};
   const currentRack = entry.participant.liftMovementRacks?.[movement] || '';
   const currentRackHeight = entry.participant.liftMovementRackHeights?.[movement] || '';
+  const currentPr = entry.participant.liftMovementPrs?.[movement] || '';
+  const bestLift = getBestLiftFromAttempts(waveData, movement);
+  const hasPrHit = bestLift > 0 && currentPr.trim() !== '' && bestLift > parseFloat(currentPr);
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-sm font-bold text-gray-900 truncate">{entry.participant.name}</span>
+          {hasPrHit && (
+            <span className="shrink-0 rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[10px] font-bold">PR</span>
+          )}
           {showRackHeight && currentRackHeight && (
             <span className="shrink-0 rounded-full bg-blue-100 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[10px] font-bold">
               H{currentRackHeight}

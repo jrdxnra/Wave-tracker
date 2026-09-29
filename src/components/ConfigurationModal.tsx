@@ -182,6 +182,40 @@ function waveIdFromTime(label: string): string {
   return `wave-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 }
 
+function buildLiftFlightSlots(liftFlights: Record<string, LiftFlight[]>, olympicMovements: string[]) {
+  const powerTimes = buildLiftFlightTimes(Object.fromEntries(
+    Object.entries(liftFlights).filter(([movement]) => !olympicMovements.includes(movement))
+  ));
+  const sessions = new Map<string, { label: string; startTime: string; endTime: string }>();
+  olympicMovements.forEach((movement) => {
+    (liftFlights[movement] || []).forEach((flight) => {
+      const startTime = normalizeWaveTimeLabel(flight.startTime);
+      const endTime = normalizeWaveTimeLabel(flight.endTime);
+      if (startTime && endTime) sessions.set(`${startTime}-${endTime}`, { label: flight.label, startTime, endTime });
+    });
+  });
+
+  const powerSlots = powerTimes.map((time) => ({
+    id: waveIdFromTime(time), name: `Flight ${time}`, startTime: time, isOlympicFlight: false,
+  }));
+  const sessionStartCounts = [...sessions.values()].reduce((counts, session) => {
+    counts.set(session.startTime, (counts.get(session.startTime) || 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+  const olympicSlots = [...sessions.values()].map((session) => ({
+    id: powerTimes.includes(session.startTime) || (sessionStartCounts.get(session.startTime) || 0) > 1
+      ? `olympic-${waveIdFromTime(session.startTime)}-${waveIdFromTime(session.endTime)}`
+      : waveIdFromTime(session.startTime),
+    name: session.label.replace(/^Flight\s+/i, 'Session '),
+    startTime: session.startTime,
+    isOlympicFlight: true,
+  }));
+  return [...powerSlots, ...olympicSlots].sort((first, second) =>
+    (parseTimeToMinutes(first.startTime) || 0) - (parseTimeToMinutes(second.startTime) || 0)
+    || Number(first.isOlympicFlight) - Number(second.isOlympicFlight)
+  );
+}
+
 function normalizeWaveTimeLabel(value: string): string | null {
   const minutes = parseTimeToMinutes(value);
   if (minutes === null) return null;
@@ -240,6 +274,12 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
   const [feedbackEnabledLocal, setFeedbackEnabledLocal] = useState<boolean>(feedbackEnabled);
   const [pinnedFormUrl, setPinnedFormUrl] = useState('');
   const [pinnedSheetUrl, setPinnedSheetUrl] = useState('');
+  const [waitlistFormUrl, setWaitlistFormUrl] = useState('');
+  const [waitlistSheetUrl, setWaitlistSheetUrl] = useState('');
+  const [responseSheetName, setResponseSheetName] = useState('Form Responses 1');
+  const [generatedScript, setGeneratedScript] = useState('');
+  const [isGeneratingScript, setIsGeneratingScript] = useState(false);
+  const [scriptGenerationError, setScriptGenerationError] = useState('');
 
   const [newEventName, setNewEventName] = useState('');
   const [newEventMovementTimingMode, setNewEventMovementTimingMode] = useState<'global' | 'individual' | 'lift'>('global');
@@ -272,6 +312,10 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     () => movementTimingModeLocal === 'lift' ? buildLiftFlightTimes(liftFlightsLocal) : buildWaveTimes(startTime, waves, interval),
     [movementTimingModeLocal, liftFlightsLocal, startTime, waves, interval]
   );
+  const expectedFlightSlots = useMemo(
+    () => movementTimingModeLocal === 'lift' ? buildLiftFlightSlots(liftFlightsLocal, olympicLiftMovementsLocal) : [],
+    [movementTimingModeLocal, liftFlightsLocal, olympicLiftMovementsLocal]
+  );
   const scheduledLiftFlightCount = useMemo(
     () => countScheduledLiftFlights(liftFlightsLocal),
     [liftFlightsLocal]
@@ -287,11 +331,13 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     );
   }, [existingWaves]);
   const missingWaveTimes = useMemo(
-    () => expectedWaveTimes.filter((time) => !existingWaveTimes.includes(normalizeWaveTimeLabel(time) || time)),
-    [expectedWaveTimes, existingWaveTimes]
+    () => movementTimingModeLocal === 'lift'
+      ? expectedFlightSlots.filter((slot) => !existingWaves[slot.id]).map((slot) => slot.startTime)
+      : expectedWaveTimes.filter((time) => !existingWaveTimes.includes(normalizeWaveTimeLabel(time) || time)),
+    [movementTimingModeLocal, expectedFlightSlots, existingWaves, expectedWaveTimes, existingWaveTimes]
   );
   const waveScheduleReady = movementTimingModeLocal === 'lift'
-    ? Boolean(startDate && expectedWaveTimes.length > 0)
+    ? Boolean(startDate && expectedFlightSlots.length > 0)
     : Boolean(startDate && startTime && Number.isFinite(waves) && waves > 0 && Number.isFinite(interval) && interval > 0);
 
   // Load fresh config from Firebase when modal opens and sync local state
@@ -383,6 +429,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       setNewEventMovementTimingMode('global');
       setPinnedFormUrl('');
       setPinnedSheetUrl('');
+      setWaitlistFormUrl('');
+      setWaitlistSheetUrl('');
       // New events start with a blank movement list, not the previously active event's movements.
       setEvents([]);
       setMovementUnitsLocal({});
@@ -417,11 +465,15 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         const links = configSnap.exists() ? configSnap.data().integrationLinks || {} : {};
         setPinnedFormUrl(typeof links.formUrl === 'string' ? links.formUrl : '');
         setPinnedSheetUrl(typeof links.sheetUrl === 'string' ? links.sheetUrl : '');
+        setWaitlistFormUrl(typeof links.waitlistFormUrl === 'string' ? links.waitlistFormUrl : '');
+        setWaitlistSheetUrl(typeof links.waitlistSheetUrl === 'string' ? links.waitlistSheetUrl : '');
       } catch (error) {
         if (!cancelled) {
           console.error('Failed to load integration links:', error);
           setPinnedFormUrl('');
           setPinnedSheetUrl('');
+          setWaitlistFormUrl('');
+          setWaitlistSheetUrl('');
         }
       }
     })();
@@ -438,6 +490,8 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       integrationLinks: {
         formUrl: pinnedFormUrl.trim(),
         sheetUrl: pinnedSheetUrl.trim(),
+        waitlistFormUrl: waitlistFormUrl.trim(),
+        waitlistSheetUrl: waitlistSheetUrl.trim(),
       },
       updatedAt: new Date().toISOString(),
     }, { merge: true });
@@ -472,8 +526,12 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
         normalizeMovementIntervals(movementIntervalsLocal, work, rest),
         saveEventId
       );
+      if (movementTimingModeLocal === 'lift') {
+        await setLiftEventConfig(liftFlightsLocal, olympicLiftMovementsLocal, saveEventId, rackMovementsLocal, rackCountLocal, platformCountLocal);
+      }
       const firstScheduledTime = expectedWaveTimes[0] || startTime;
-      await setEventConfig(startDate, firstScheduledTime, movementTimingModeLocal === 'lift' ? expectedWaveTimes.length : Math.max(1, Math.round(waves)), saveEventId);
+      const expectedCount = movementTimingModeLocal === 'lift' ? expectedFlightSlots.length : expectedWaveTimes.length;
+      await setEventConfig(startDate, firstScheduledTime, movementTimingModeLocal === 'lift' ? expectedCount : Math.max(1, Math.round(waves)), saveEventId);
       await setMaxParticipants(maxParticipantsLocal, saveEventId);
 
       const { db } = getFirebase();
@@ -484,24 +542,32 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
       const wavesCol = collection(db, 'events', saveEventId, 'waves');
       const beforeSnap = await getDocs(wavesCol);
+      const beforeIds = new Set(beforeSnap.docs.map((wave) => wave.id));
       const beforeTimes = new Set(
         beforeSnap.docs
           .map((docSnap) => normalizeWaveTimeLabel(String(docSnap.data().startTime || '')))
           .filter((time): time is string => Boolean(time))
       );
-      const missingBefore = expectedNormalized.filter((time) => !beforeTimes.has(time));
+      const missingBefore = movementTimingModeLocal === 'lift'
+        ? expectedFlightSlots.filter((slot) => !beforeIds.has(slot.id)).map((slot) => slot.id)
+        : expectedNormalized.filter((time) => !beforeTimes.has(time));
+
+      const slots = movementTimingModeLocal === 'lift' ? expectedFlightSlots : expectedWaveTimes.map((time) => ({
+        id: waveIdFromTime(time), name: `${termCap} ${time}`, startTime: time, isOlympicFlight: false,
+      }));
 
       await Promise.all(
-        expectedWaveTimes.map((time) =>
-          setDoc(doc(db, 'events', saveEventId, 'waves', waveIdFromTime(time)), {
-            id: waveIdFromTime(time),
-            name: `${termCap} ${time}`,
-            startTime: time,
+        slots.map((slot) => {
+          return setDoc(doc(db, 'events', saveEventId, 'waves', slot.id), {
+            id: slot.id,
+            name: slot.name,
+            startTime: slot.startTime,
             coach: '',
+            isOlympicFlight: slot.isOlympicFlight,
             updatedAt: now,
             createdBy: 'configuration-modal',
-          }, { merge: true })
-        )
+          }, { merge: true });
+        })
       );
 
       // Remove legacy placeholder waves (e.g. "Wave 1") that have no start time and no participants.
@@ -528,20 +594,23 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
       await useWaveStore.getState().loadAll({ preserveActiveEvent: true, force: true });
 
       const afterSnap = await getDocs(wavesCol);
+      const afterIds = new Set(afterSnap.docs.map((wave) => wave.id));
       const afterTimes = new Set(
         afterSnap.docs
           .map((docSnap) => normalizeWaveTimeLabel(String(docSnap.data().startTime || '')))
           .filter((time): time is string => Boolean(time))
       );
-      const stillMissing = expectedNormalized.filter((time) => !afterTimes.has(time));
+      const stillMissing = movementTimingModeLocal === 'lift'
+        ? expectedFlightSlots.filter((slot) => !afterIds.has(slot.id)).map((slot) => slot.id)
+        : expectedNormalized.filter((time) => !afterTimes.has(time));
       const createdCount = Math.max(0, missingBefore.length - stillMissing.length);
 
       if (stillMissing.length > 0) {
-        alert(`Synced ${expectedWaveTimes.length} ${termLower}(s), but ${stillMissing.length} expected time(s) are still missing.`);
+        alert(`Synced ${expectedCount} ${termLower}(s), but ${stillMissing.length} expected slot(s) are still missing.`);
       } else if (createdCount > 0) {
-        alert(`Created ${expectedWaveTimes.length} ${termLower}(s). ${createdCount} were newly added.`);
+        alert(`Created ${expectedCount} ${termLower}(s). ${createdCount} were newly added.`);
       } else {
-        alert(`All ${expectedWaveTimes.length} ${termLower}(s) already exist.`);
+        alert(`All ${expectedCount} ${termLower}(s) already exist.`);
       }
     } catch (error) {
       console.error('❌ Failed to create waves:', error);
@@ -976,6 +1045,33 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
     </div>
   );
 
+  const handleGenerateRegistrationScript = async () => {
+    if (!responseSheetName.trim()) return;
+    setIsGeneratingScript(true);
+    setScriptGenerationError('');
+    setGeneratedScript('');
+    try {
+      const response = await fetch('/api/registration-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: activeEventId,
+          responseSheetName: responseSheetName.trim(),
+          movementTimingMode,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to build registration script');
+      }
+      setGeneratedScript(data.script);
+    } catch (error) {
+      setScriptGenerationError(error instanceof Error ? error.message : 'Failed to build registration script');
+    } finally {
+      setIsGeneratingScript(false);
+    }
+  };
+
   const renderInfoTip = (tipText: string, label: string, align: 'left' | 'right' = 'left') => (
     <span className="relative inline-flex group">
       <button
@@ -1175,9 +1271,9 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <h3 className="text-lg font-medium text-gray-900">Pinned Form + Sheet Links</h3>
+            <h3 className="text-lg font-medium text-gray-900">Registration and Waitlist Links</h3>
             {renderInfoTip(
-              'Store the Google Form URL and Google Sheet URL for this event so staff can quickly open both from inside the app.',
+              'Store separate registration and waitlist Form/Sheet URLs for this event.',
               'Form and Sheet integration information'
             )}
           </div>
@@ -1189,7 +1285,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
 
             <div className="grid grid-cols-1 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Google Form URL</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Registration Form URL</label>
                 <input
                   type="url"
                   value={pinnedFormUrl}
@@ -1200,11 +1296,33 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Google Sheet URL</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Registration Sheet URL</label>
                 <input
                   type="url"
                   value={pinnedSheetUrl}
                   onChange={(e) => setPinnedSheetUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/..."
+                  className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Waitlist Form URL</label>
+                <input
+                  type="url"
+                  value={waitlistFormUrl}
+                  onChange={(e) => setWaitlistFormUrl(e.target.value)}
+                  placeholder="https://docs.google.com/forms/..."
+                  className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Waitlist Sheet URL</label>
+                <input
+                  type="url"
+                  value={waitlistSheetUrl}
+                  onChange={(e) => setWaitlistSheetUrl(e.target.value)}
                   placeholder="https://docs.google.com/spreadsheets/..."
                   className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
                 />
@@ -1260,6 +1378,74 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               </div>
             </div>
 
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-lg font-medium text-gray-900">Registration Sync Script</h3>
+            {renderInfoTip(
+              'Generates the Google Apps Script that connects this event\'s Google Form/Sheet to the app. Paste it into that Sheet\'s Extensions > Apps Script.',
+              'Registration sync script information'
+            )}
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
+                <p className="text-xs text-gray-600">
+                  Active Event ID: <span className="font-semibold text-gray-800">{activeEventId}</span>
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Response Sheet Tab Name</label>
+                  <input
+                    type="text"
+                    value={responseSheetName}
+                    onChange={(e) => setResponseSheetName(e.target.value)}
+                    placeholder="Form Responses 1"
+                    className="w-full h-10 px-3 border border-gray-300 rounded-md input-focus-brand"
+                  />
+                  <p className="mt-1 text-xs text-gray-600">
+                    ⚠️ Don&apos;t rename this tab in the Sheet. If it was already renamed, type the real name above.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleGenerateRegistrationScript();
+                  }}
+                  disabled={isGeneratingScript || !responseSheetName.trim()}
+                  className="rounded-md px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: themeColors.accent }}
+                >
+                  {isGeneratingScript ? 'Generating...' : 'Generate Script'}
+                </button>
+
+                {scriptGenerationError && (
+                  <p className="text-xs text-red-600">{scriptGenerationError}</p>
+                )}
+
+                {generatedScript && (
+                  <div className="space-y-2">
+                    <textarea
+                      readOnly
+                      value={generatedScript}
+                      rows={8}
+                      className="w-full rounded-md border border-gray-300 bg-white p-2 font-mono text-[11px] text-gray-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void copyToClipboard(generatedScript, 'Registration sync script');
+                      }}
+                      className="rounded-md px-3 py-2 text-xs font-semibold text-gray-800 border border-gray-300 bg-white hover:bg-gray-100"
+                    >
+                      Copy Script
+                    </button>
+                    <p className="text-xs text-gray-600">
+                      Paste this into Extensions &gt; Apps Script in the Sheet, save, then run <code>installOrRepairTriggers</code> once.
+                    </p>
+                  </div>
+                )}
           </div>
         </div>
 
@@ -1381,7 +1567,7 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
               <div className="text-sm font-semibold text-gray-900">Create {waveTermPlural}</div>
               <div className="text-xs text-gray-600">
                 {movementTimingModeLocal === 'lift'
-                  ? `Creates flight docs from movement flight start times. ${scheduledLiftFlightCount} movement flight${scheduledLiftFlightCount === 1 ? '' : 's'} found across ${expectedWaveTimes.length} unique start time${expectedWaveTimes.length === 1 ? '' : 's'}.`
+                  ? `Creates ${expectedFlightSlots.length} Powerlifting and Olympic session pills from ${scheduledLiftFlightCount} configured movement flights across ${expectedWaveTimes.length} start times.`
                   : `Creates the ${waveTermLower} docs from start date, start time, total ${waveTermPlural.toLowerCase()}, and interval.`
                 }
               </div>
@@ -1413,11 +1599,11 @@ export default function ConfigurationModal({ isOpen, onClose, onClearCache, init
                 {isCreatingWaves
                   ? 'Creating...'
                   : movementTimingModeLocal === 'lift'
-                    ? expectedWaveTimes.length === 0
+                    ? expectedFlightSlots.length === 0
                       ? 'Add Flight Start Times'
                       : missingWaveTimes.length > 0
-                        ? `Create / Sync Flight Times (${missingWaveTimes.length} missing of ${expectedWaveTimes.length})`
-                        : `Flight Times Ready (${expectedWaveTimes.length} scheduled)`
+                        ? `Create / Sync Flights (${missingWaveTimes.length} missing of ${expectedFlightSlots.length})`
+                        : `Flights Ready (${expectedFlightSlots.length} scheduled)`
                     : missingWaveTimes.length > 0
                       ? `Create / Sync ${waveTermPlural} (${missingWaveTimes.length} missing)`
                       : `${waveTermPlural} Ready (${expectedWaveTimes.length})`

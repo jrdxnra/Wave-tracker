@@ -23,6 +23,7 @@ interface RegistrationPayload {
   row_number?: number;
   timestamp?: string;
   name?: string;
+  registration_template?: string;
   first_preference_hour?: string;
   first_preference_flexibility?: string;
   second_preference_hour?: string;
@@ -46,7 +47,24 @@ interface RegistrationPayload {
   volunteer_role?: string;
   internal_notes?: string;
   portal_url?: string;
+  // Lift Event only: raw registration answers, always manually reviewed/assigned by staff.
+  division?: string;
+  squat_first_preference?: string;
+  squat_second_preference?: string;
+  squat_opener_weight?: string;
+  squat_rack_height?: string;
+  bench_first_preference?: string;
+  bench_second_preference?: string;
+  bench_opener_weight?: string;
+  bench_rack_height?: string;
+  deadlift_first_preference?: string;
+  deadlift_second_preference?: string;
+  deadlift_opener_weight?: string;
+  olympic_lifting_selection?: string;
+  is_first_gfit_games?: boolean;
+  is_first_hp_event?: boolean;
 }
+
 
 type RegistrationStatus = 'Pending' | 'Confirmed' | 'Waitlisted' | 'Cancelled';
 type ProcessingMode = 'auto_allocation' | 'manual_update';
@@ -602,9 +620,12 @@ export async function POST(req: NextRequest) {
     let finalStatus: RegistrationStatus = normalizeStatus(payload.registration_status);
     let finalWaveTime: string | null = normalizeWaveTime(payload.confirmed_wave_time);
     let mode: ProcessingMode = 'manual_update';
+    const isLiftEventRegistration = payload.registration_template === 'lift-event';
 
-    // Fully automated path: every new form submit is auto-allocated if capacity exists.
-    if (triggerSource === 'form_submit') {
+    // Lift Event lifters need a separate flight per lift (Squat/Bench/Deadlift/Olympic), which
+    // the single confirmedWaveTime/auto-allocation model below doesn't support. Staff assign
+    // each lifter's flights manually from the raw answers, so always leave these as Pending.
+    if (triggerSource === 'form_submit' && !isLiftEventRegistration) {
       mode = 'auto_allocation';
       if (finalStatus !== 'Cancelled') {
         const assigned = await chooseAutoWaveTime(db, eventId, payload, waveCapacityLimit, waveTimes);
@@ -660,6 +681,24 @@ export async function POST(req: NextRequest) {
       participantIdSource: identity.source || null,
       updatedAt: now,
       source: 'google-form-webhook',
+      registrationTemplate: payload.registration_template || '',
+      division: payload.division || '',
+      // Alias so the Flight tab's existing registration auto-fill (which reads genderCategory) picks this up.
+      genderCategory: payload.division || '',
+      squatFirstPreference: payload.squat_first_preference || '',
+      squatSecondPreference: payload.squat_second_preference || '',
+      squatOpenerWeight: payload.squat_opener_weight || '',
+      squatRackHeight: payload.squat_rack_height || '',
+      benchFirstPreference: payload.bench_first_preference || '',
+      benchSecondPreference: payload.bench_second_preference || '',
+      benchOpenerWeight: payload.bench_opener_weight || '',
+      benchRackHeight: payload.bench_rack_height || '',
+      deadliftFirstPreference: payload.deadlift_first_preference || '',
+      deadliftSecondPreference: payload.deadlift_second_preference || '',
+      deadliftOpenerWeight: payload.deadlift_opener_weight || '',
+      olympicLiftingSelection: payload.olympic_lifting_selection || '',
+      isFirstGfitGames: !!payload.is_first_gfit_games,
+      isFirstHpEvent: !!payload.is_first_hp_event,
     }, { merge: true });
 
     let linkedWaveId: string | null = null;

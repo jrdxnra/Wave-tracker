@@ -14,6 +14,8 @@ import PasscodeProtection from '@/components/PasscodeProtection';
 import EventPageHeader from '@/components/EventPageHeader';
 import LoadingState from '@/components/LoadingState';
 import RegistrationsTab from '@/components/RegistrationsTab';
+import WaitlistTab from '@/components/WaitlistTab';
+import AnalyticsTab from '@/components/AnalyticsTab';
 
 function parseWaveStartToMinutes(value: string): number | null {
   const raw = String(value || '').trim();
@@ -50,10 +52,12 @@ export default function Page() {
   const [mounted, setMounted] = useState(clientHasMounted);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configInitialTab, setConfigInitialTab] = useState<'movement' | 'event'>('movement');
-  const [activeTab, setActiveTab] = useState<'waves' | 'registrations'>('waves');
+  const [activeTab, setActiveTab] = useState<'waves' | 'registrations' | 'waitlist' | 'analytics'>('waves');
   const [pendingWaveFocusTime, setPendingWaveFocusTime] = useState<string | null>(null);
   const [pinnedFormUrl, setPinnedFormUrl] = useState('');
   const [pinnedSheetUrl, setPinnedSheetUrl] = useState('');
+  const [waitlistFormUrl, setWaitlistFormUrl] = useState('');
+  const [waitlistSheetUrl, setWaitlistSheetUrl] = useState('');
   const {
     waves,
     eventNotes,
@@ -93,7 +97,9 @@ export default function Page() {
       const minutesA = parseWaveStartToMinutes(a[1].startTime);
       const minutesB = parseWaveStartToMinutes(b[1].startTime);
 
-      if (minutesA !== null && minutesB !== null) return minutesA - minutesB;
+      if (minutesA !== null && minutesB !== null) {
+        return minutesA - minutesB || Number(a[1].isOlympicFlight === true) - Number(b[1].isOlympicFlight === true);
+      }
       if (minutesA !== null) return -1;
       if (minutesB !== null) return 1;
 
@@ -144,15 +150,21 @@ export default function Page() {
           const links = snapshot.exists() ? snapshot.data().integrationLinks || {} : {};
           setPinnedFormUrl(typeof links.formUrl === 'string' ? links.formUrl : '');
           setPinnedSheetUrl(typeof links.sheetUrl === 'string' ? links.sheetUrl : '');
+          setWaitlistFormUrl(typeof links.waitlistFormUrl === 'string' ? links.waitlistFormUrl : '');
+          setWaitlistSheetUrl(typeof links.waitlistSheetUrl === 'string' ? links.waitlistSheetUrl : '');
         },
         () => {
           setPinnedFormUrl('');
           setPinnedSheetUrl('');
+          setWaitlistFormUrl('');
+          setWaitlistSheetUrl('');
         }
       );
     } catch {
       setPinnedFormUrl('');
       setPinnedSheetUrl('');
+      setWaitlistFormUrl('');
+      setWaitlistSheetUrl('');
     }
 
     return () => unsubscribe();
@@ -207,7 +219,7 @@ export default function Page() {
 
         <div className="mb-6">
           <div className="bg-white rounded-lg shadow-md p-2 border border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="inline-flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setActiveTab('waves')}
                 className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${activeTab === 'waves' ? 'text-white' : 'text-gray-700 hover:bg-gray-100'}`}
@@ -222,28 +234,42 @@ export default function Page() {
               >
                 Registrations
               </button>
+              <button
+                onClick={() => setActiveTab('waitlist')}
+                className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${activeTab === 'waitlist' ? 'text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                style={activeTab === 'waitlist' ? { backgroundColor: accent } : undefined}
+              >
+                Waitlist
+              </button>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${activeTab === 'analytics' ? 'text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                style={activeTab === 'analytics' ? { backgroundColor: accent } : undefined}
+              >
+                Analytics
+              </button>
             </div>
             <div className="flex items-center gap-2">
-              {pinnedFormUrl && (
+              {(activeTab === 'waitlist' ? waitlistFormUrl : pinnedFormUrl) && (
                 <a
-                  href={pinnedFormUrl}
+                  href={activeTab === 'waitlist' ? waitlistFormUrl : pinnedFormUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="px-3 py-2 rounded-md text-xs font-semibold text-white"
                   style={{ backgroundColor: accent }}
                 >
-                  Open Form
+                  {activeTab === 'waitlist' ? 'Open Waitlist Form' : 'Open Form'}
                 </a>
               )}
-              {pinnedSheetUrl && (
+              {(activeTab === 'waitlist' ? waitlistSheetUrl : pinnedSheetUrl) && (
                 <a
-                  href={pinnedSheetUrl}
+                  href={activeTab === 'waitlist' ? waitlistSheetUrl : pinnedSheetUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="px-3 py-2 rounded-md text-xs font-semibold text-white"
                   style={{ backgroundColor: accent }}
                 >
-                  Open Sheet
+                  {activeTab === 'waitlist' ? 'Open Waitlist Sheet' : 'Open Sheet'}
                 </a>
               )}
             </div>
@@ -333,7 +359,7 @@ export default function Page() {
                 </div>
               </div>
             </>
-          ) : (
+          ) : activeTab === 'registrations' ? (
             <RegistrationsTab
               eventId={activeEventId}
               accent={accent}
@@ -342,6 +368,10 @@ export default function Page() {
                 setActiveTab('waves');
               }}
             />
+          ) : activeTab === 'waitlist' ? (
+            <WaitlistTab eventId={activeEventId} />
+          ) : (
+            <AnalyticsTab />
           )}
         </main>
       </div>

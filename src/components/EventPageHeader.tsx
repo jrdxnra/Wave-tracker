@@ -10,6 +10,7 @@ interface EventPageHeaderProps {
   eventBranding: EventBranding;
   pageLabel: string;
   subtitle: string;
+  headerAside?: ReactNode;
   children?: ReactNode;
 }
 
@@ -17,6 +18,7 @@ export default function EventPageHeader({
   eventBranding,
   pageLabel,
   subtitle,
+  headerAside,
   children,
 }: EventPageHeaderProps) {
   return (
@@ -24,6 +26,7 @@ export default function EventPageHeader({
       <div className="header-gradient p-8">
         <div className="header-emoji header-emoji-left">{eventBranding.emojiLeft}</div>
         <div className="header-emoji header-emoji-right">{eventBranding.emojiRight}</div>
+        {headerAside}
         <div className="pt-8 sm:pt-4">
           <h1 className="text-3xl md:text-4xl header-title mb-2">
             <span className="hidden sm:inline">

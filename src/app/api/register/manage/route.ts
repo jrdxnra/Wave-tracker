@@ -18,13 +18,16 @@ import {
 
 type RegistrationStatus = 'Pending' | 'Confirmed' | 'Waitlisted' | 'Cancelled';
 
-type ManageAction = 'auto_allocate' | 'manual_override' | 'waitlist';
+type ManageAction = 'auto_allocate' | 'manual_override' | 'waitlist' | 'assign_lift' | 'assign_olympic_session' | 'sync_lift';
 
 interface ManagePayload {
   event_id?: string;
   participant_id?: string;
   action?: ManageAction;
   manual_wave_time?: string;
+  movement?: string;
+  flight_label?: string;
+  olympic_session_start?: string;
 }
 
 const DEFAULT_EVENT_ID = 'super-sprint';
@@ -437,6 +440,152 @@ export async function POST(req: NextRequest) {
 
     const regData = regSnap.data() as Record<string, unknown>;
     const portalUrl = String(regData.portalUrl || `/portal/${participantId}?event=${eventId}`);
+
+    if (action === 'assign_lift' || action === 'assign_olympic_session' || action === 'sync_lift') {
+      const configSnap = await getDoc(doc(db, 'events', eventId, 'config', 'global'));
+      const config = configSnap.data();
+      if (config?.timing?.movementMode !== 'lift' || regData.registrationTemplate !== 'lift-event') {
+        return NextResponse.json({ ok: false, error: 'Lift assignment requires a lift-event registration' }, { status: 400 });
+      }
+      if (regData.registrationStatus === 'Cancelled') {
+        return NextResponse.json({ ok: false, error: 'Cancelled registrations cannot be assigned' }, { status: 409 });
+      }
+
+      const flightsByMovement = (config?.liftEvent?.flights || {}) as Record<string, Array<{ label: string; startTime: string }>>;
+      const movement = String(payload.movement || '');
+      const flightLabel = String(payload.flight_label || '');
+      const options = flightsByMovement[movement] || [];
+      if (action === 'assign_lift' && (!options.length || (flightLabel && !options.some((flight) => flight.label === flightLabel)))) {
+        return NextResponse.json({ ok: false, error: 'Select a configured flight for this movement' }, { status: 400 });
+      }
+
+      const olympicMovements = (config?.liftEvent?.olympicLiftMovements || []) as string[];
+      const sessionStart = String(payload.olympic_session_start || '');
+      if (action === 'assign_olympic_session' && sessionStart &&
+        !olympicMovements.some((name) => (flightsByMovement[name] || []).some((flight) => flight.startTime === sessionStart))) {
+        return NextResponse.json({ ok: false, error: 'Select a configured Olympic session' }, { status: 400 });
+      }
+      const assignments = { ...((regData.liftMovementFlights || {}) as Record<string, string>) };
+      if (action === 'assign_lift') assignments[movement] = flightLabel;
+      if (action === 'assign_olympic_session') {
+        for (const name of olympicMovements) {
+          if (!assignments[name]) continue;
+          const match = (flightsByMovement[name] || []).find((flight) => flight.startTime === sessionStart);
+          if (sessionStart && !match) {
+            return NextResponse.json({ ok: false, error: `No ${name} flight in this session` }, { status: 400 });
+          }
+          assignments[name] = match?.label || '';
+        }
+      }
+      const invalidAssignment = Object.entries(assignments).find(([name, label]) =>
+        label && !(flightsByMovement[name] || []).some((flight) => flight.label === label)
+      );
+      if (invalidAssignment) {
+        return NextResponse.json({
+          ok: false,
+          error: `${invalidAssignment[0]} ${invalidAssignment[1]} is no longer configured; choose a new flight first`,
+        }, { status: 409 });
+      }
+      const selectedFlights = Object.entries(assignments).flatMap(([name, label]) => {
+        const flight = (flightsByMovement[name] || []).find((option) => option.label === label);
+        return flight ? [{ movement: name, ...flight }] : [];
+      });
+      if (selectedFlights.length === 0) {
+        return NextResponse.json({ ok: false, error: 'Keep at least one flight assigned; use cancellation to remove a lifter' }, { status: 400 });
+      }
+
+      const olympicFlights = selectedFlights.filter((flight) => olympicMovements.includes(flight.movement));
+      const olympicStartTimes = new Set(olympicFlights.map((flight) => flight.startTime));
+      if (olympicStartTimes.size > 1) {
+        return NextResponse.json({ ok: false, error: 'Olympic lifts must use the same session' }, { status: 400 });
+      }
+
+      const waveSnap = await getDocs(collection(db, 'events', eventId, 'waves'));
+      const participantDocs = await Promise.all(waveSnap.docs.map((wave) =>
+        getDoc(doc(db, 'events', eventId, 'waves', wave.id, 'participants', participantId))
+      ));
+      const existingIndex = participantDocs.findIndex((participant) => participant.exists());
+      const existing = existingIndex >= 0 ? participantDocs[existingIndex].data() : null;
+
+      const capacityChecks = selectedFlights.filter((flight) =>
+        !olympicMovements.includes(flight.movement) && (
+          action === 'sync_lift' ||
+          (action === 'assign_lift' && flight.movement === movement &&
+            (regData.liftMovementFlights as Record<string, string> | undefined)?.[movement] !== flightLabel)
+        )
+      );
+      if (capacityChecks.length > 0) {
+        const capacity = Number(config.maxParticipants);
+        if (!Number.isFinite(capacity) || capacity < 1) {
+          return NextResponse.json({ ok: false, error: 'Configure a flight capacity first' }, { status: 400 });
+        }
+        const rosters = await Promise.all(waveSnap.docs.map((wave) =>
+          getDocs(collection(db, 'events', eventId, 'waves', wave.id, 'participants'))
+        ));
+        for (const flight of capacityChecks) {
+          const assignedIds = new Set(rosters.flatMap((roster) => roster.docs)
+            .filter((entry) => entry.id !== participantId && entry.data().liftMovementFlights?.[flight.movement] === flight.label)
+            .map((entry) => entry.id));
+          if (assignedIds.size >= capacity) {
+            return NextResponse.json({ ok: false, error: `${flight.movement} ${flight.label} is full` }, { status: 409 });
+          }
+        }
+      }
+
+      const powerliftingEntry = selectedFlights.some((flight) => !olympicMovements.includes(flight.movement));
+      const anchorCandidates = powerliftingEntry
+        ? selectedFlights.filter((flight) => !olympicMovements.includes(flight.movement))
+        : selectedFlights;
+      const anchor = [...anchorCandidates].sort((first, second) =>
+        (parseTimeToMinutes(first.startTime) || 0) - (parseTimeToMinutes(second.startTime) || 0)
+      )[0];
+      const anchorTime = normalizeWaveTime(anchor.startTime);
+      if (!anchorTime) {
+        return NextResponse.json({ ok: false, error: 'Configured flight has no valid start time' }, { status: 400 });
+      }
+      const preferredWave = waveSnap.docs.find((wave) =>
+        normalizeWaveTime(String(wave.data().startTime || '')) === anchorTime &&
+        (wave.data().isOlympicFlight === true) === !powerliftingEntry
+      );
+      if (!powerliftingEntry && !preferredWave) {
+        return NextResponse.json({ ok: false, error: 'Create Olympic session pills in Settings first' }, { status: 409 });
+      }
+      const linkedWaveId = preferredWave?.id || await getOrCreateWaveId(db, eventId, anchorTime);
+      const now = new Date().toISOString();
+      const olympicSessionStart = action === 'assign_olympic_session' ? sessionStart : olympicFlights[0]?.startTime || '';
+      const update = {
+        liftMovementFlights: assignments,
+        olympicSessionStart,
+        olympicLiftsOptIn: olympicFlights.length > 0 || regData.olympicLiftsOptIn === true,
+        powerliftingEntry,
+        registrationStatus: 'Confirmed',
+        updatedAt: now,
+      };
+
+      await setDoc(doc(db, 'events', eventId, 'waves', linkedWaveId, 'participants', participantId), {
+        id: participantId,
+        name: String(regData.name || '').trim() || participantId,
+        waveData: existing?.waveData || {},
+        includeInLeaderboard: regData.includeInLeaderboard !== false,
+        genderCategory: String(regData.genderCategory || regData.division || ''),
+        bodyWeight: String(existing?.bodyWeight || regData.bodyWeight || ''),
+        liftMovementRackHeights: {
+          ...(existing?.liftMovementRackHeights || {}),
+          ...(regData.squatRackHeight ? { Squat: String(regData.squatRackHeight) } : {}),
+          ...(regData.benchRackHeight ? { Bench: String(regData.benchRackHeight) } : {}),
+          ...((regData.liftMovementRackHeights || {}) as Record<string, string>),
+        },
+        liftMovementPrs: regData.liftMovementPrs || existing?.liftMovementPrs || {},
+        ...update,
+      }, { merge: true });
+      await removeParticipantFromAllWaves(db, eventId, participantId, linkedWaveId);
+      await setDoc(regRef, { participantId, ...update, source: 'manual-ops' }, { merge: true });
+
+      return NextResponse.json({
+        ok: true, eventId, participantId, action, registrationStatus: 'Confirmed', assigned_wave: null, linkedWaveId,
+        liftMovementFlights: assignments, olympicSessionStart, olympicLiftsOptIn: update.olympicLiftsOptIn, powerliftingEntry,
+      });
+    }
 
     let status: RegistrationStatus = 'Pending';
     let assignedWave: string | null = null;

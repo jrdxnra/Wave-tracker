@@ -69,6 +69,44 @@ body:before {
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
 
+.leaderboard-celebration {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: start center;
+  padding: 1.5rem;
+  pointer-events: none;
+}
+
+.leaderboard-celebration__card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: min(360px, calc(100vw - 3rem));
+  padding: 0.85rem 1.1rem;
+  border: 2px solid;
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.96);
+  box-shadow: 0 16px 36px rgb(15 23 42 / 0.2), 0 0 0 5px color-mix(in srgb, var(--celebration-color) 16%, transparent);
+  animation: leaderboardCelebrationIn 0.45s cubic-bezier(.2, .85, .3, 1.2) both, leaderboardCelebrationOut 0.5s ease 3s both;
+}
+
+.leaderboard-celebration__emoji { font-size: 2.3rem; animation: leaderboardCelebrationBounce 0.8s ease-in-out 0.25s both; }
+.leaderboard-celebration__eyebrow { margin: 0; color: #6b7280; font-size: 0.68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.leaderboard-celebration__name { margin: 0.15rem 0 0; color: #111827; font-size: 1.15rem; font-weight: 900; }
+.leaderboard-celebration__confetti { position: absolute; top: 0.6rem; left: 50%; width: 1px; height: 4rem; }
+.leaderboard-celebration__confetti span { position: absolute; top: 0; left: calc((var(--confetti-index) - 9) * 1.7rem); width: 0.45rem; height: 0.8rem; border-radius: 2px; background: hsl(calc(var(--confetti-index) * 43), 85%, 55%); animation: leaderboardConfetti 1.6s cubic-bezier(.15, .65, .35, 1) calc(var(--confetti-index) * 35ms) both; }
+
+@keyframes leaderboardCelebrationIn { from { opacity: 0; transform: translateY(-2rem) scale(.8); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes leaderboardCelebrationOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-0.5rem) scale(.98); } }
+@keyframes leaderboardCelebrationBounce { 0%, 100% { transform: rotate(0) scale(1); } 35% { transform: rotate(-12deg) scale(1.2); } 70% { transform: rotate(12deg) scale(1.05); } }
+@keyframes leaderboardConfetti { from { opacity: 1; transform: translate(0, 0) rotate(0); } to { opacity: 0; transform: translate(calc((var(--confetti-index) - 9) * 0.8rem), 7rem) rotate(420deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .leaderboard-celebration { display: none; }
+}
+
 /* Buttons - Black and orange design system */
 .delete-btn { background-color: #1f2937; color: white; padding: 0.5rem 1rem; border-radius: 0.375rem; border: none; cursor: pointer; transition: background-color 0.2s; }
 .delete-btn:hover { background-color: #111827; }
